@@ -31,13 +31,13 @@ frames = {name: pd.read_csv(reports / f"{name}.csv") for name in required}
 q = frames["quality"].iloc[0]
 total = int(q["total_station_stop_rows"])
 eligible = int(q["eligible_changed_arrivals"])
-coverage = q["scheduled_arrival_change_coverage_pct"]
+coverage = q.get("processed_arrival_timestamp_presence_pct", q.get("scheduled_arrival_change_coverage_pct"))
 cancelled = int(q["cancelled_arrival_records"])
 
 st.subheader("Coverage & quality")
 a, b, c, d = st.columns(4)
 a.metric("Dortmund station stops", f"{total:,}")
-b.metric("Eligible changed arrivals", f"{eligible:,}")
+b.metric("Eligible processed arrival rows", f"{eligible:,}")
 c.metric("Processed arrival timestamp presence", "N/A" if pd.isna(coverage) else f"{coverage:.1f}%")
 d.metric("Cancelled arrival records", f"{cancelled:,}")
 with st.expander("Full quality diagnostics / methodology"):
