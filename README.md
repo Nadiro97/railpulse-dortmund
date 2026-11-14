@@ -28,6 +28,10 @@ The project **does not include train datasets**. Downloaded files are kept local
 
 ## Explicit update validation (second milestone)
 
+**Verified September 2026 milestone:** 129,500 / 132,450 eligible Dortmund scheduled arrivals have at least one explicitly recorded arrival-time update in the parsed snapshots (**97.77% coverage**). These are timetable updates, **not confirmed actual train arrivals**. See [data-backed validation results](docs/EXPLICIT_UPDATES_RESULTS_2026_09.md) and the [successful GitHub Actions run](https://github.com/Nadiro97/railpulse-dortmund/actions/runs/43643412457).
+
+
+
 The processed monthly archive fills absent arrival changes with planned times. To identify **explicitly recorded arrival updates**, RailPulse now cross-checks stop IDs and EVA station codes against the original parsed change snapshots. This distinguishes rows with an observed updated timestamp from rows that cannot be verified. **Even explicitly recorded updates are not independently confirmed physical arrivals.**
 
 ```bash
