@@ -9,9 +9,9 @@ st.set_page_config(page_title="RailPulse Dortmund", page_icon="🚆", layout="wi
 st.title("RailPulse Dortmund 🚆")
 st.caption("Independent, educational railway timetable-update analytics · Deutsche Bahn / Piet Brömmel")
 st.warning(
-    "Updated arrival timestamps are **not necessarily verified physical arrivals**. "
-    "Only stops with both planned and changed arrival times enter the difference statistics. "
-    "Missing changes are not treated as punctual."
+    "The archive's processed **arrival_change_time is filled with the scheduled time when no change is recorded**. "
+    "A zero-minute difference therefore may mean no observed update, **not** a verified on-time arrival. "
+    "Positive differences are timetable-update deviations, not independently confirmed physical arrival delays."
 )
 
 reports = Path("reports")
@@ -38,14 +38,15 @@ st.subheader("Coverage & quality")
 a, b, c, d = st.columns(4)
 a.metric("Dortmund station stops", f"{total:,}")
 b.metric("Eligible changed arrivals", f"{eligible:,}")
-c.metric("Scheduled-arrival change coverage", "N/A" if pd.isna(coverage) else f"{coverage:.1f}%")
+c.metric("Processed arrival timestamp presence", "N/A" if pd.isna(coverage) else f"{coverage:.1f}%")
 d.metric("Cancelled arrival records", f"{cancelled:,}")
 with st.expander("Full quality diagnostics / methodology"):
     st.dataframe(frames["quality"], use_container_width=True, hide_index=True)
     st.dataframe(frames["station_quality"], use_container_width=True, hide_index=True)
     st.caption(
-        "Coverage is presence of changed timestamps among planned arrivals, NOT a punctuality rate. "
-        "Cancelled arrivals are a count of records, not unique passenger journeys."
+        "The processed archive fills absent change timestamps with planned timestamps, so 100% presence is expected "
+        "and does not measure API observation coverage or punctuality. "
+        "Cancelled arrivals are record counts, not passenger journeys."
     )
 
 by_station = frames["by_station"]
