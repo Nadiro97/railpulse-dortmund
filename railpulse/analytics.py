@@ -34,7 +34,7 @@ def report_sql(source_sql: str) -> dict[str, str]:
                 ROUND(100.0 * COUNT(*) FILTER (WHERE arrival_change_time IS NOT NULL
                     AND arrival_planned_time IS NOT NULL)
                   / NULLIF(COUNT(*) FILTER (WHERE arrival_planned_time IS NOT NULL), 0), 2)
-                    AS scheduled_arrival_change_coverage_pct
+                    AS processed_arrival_timestamp_presence_pct
             {basic}
         """,
         "station_quality": f"""
