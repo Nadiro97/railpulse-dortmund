@@ -4,7 +4,7 @@
 
 Python · DuckDB · Parquet · SQL · Streamlit
 
-> **Project status:** Starter pipeline. No real delay results or models are claimed until a real monthly dataset has been downloaded and validated. Deutsche Bahn rail records, not DSW21 bus or Stadtbahn records.
+> **Project status:** September 2026 source data has been processed through GitHub Actions. Read the [first verified descriptive findings](docs/RESULTS_2026_09.md). Updated times may reflect planned-time fallbacks, so these are **not verified actual arrival delays**. Deutsche Bahn rail records only, not DSW21 buses or Stadtbahnen.
 
 ## Quick start
 
