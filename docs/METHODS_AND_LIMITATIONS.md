@@ -18,3 +18,10 @@ All source timestamps are Europe/Berlin naive local time. Daylight saving transi
 
 ## Causality
 This dataset does not identify why delays occurred. Weather, construction, traffic and staffing effects cannot be asserted without independently licensed covariates and appropriate study design. Recommendations are hypothetical until tested.
+
+## Important upstream fallback discovered during validation (2026-11-14)
+
+The monthly processed release creates `arrival_change_time` with
+`COALESCE(f.arrival_change_time, p.arrival_planned_time, f.arrival_planned_time)`.
+This is documented in [the archive's processing code](https://github.com/piebro/deutsche-bahn-data/blob/main/scripts/create_monthly_data_release.py).
+Consequently, a zero difference **may mean no observed change update**, rather than a confirmed on-time arrival. Timestamp presence (often 100%) is not observation completeness. Results are descriptive processed timetable-update differences only. For separately observable change snapshots, inspect the parsed `monthly_processed_data_change` dataset in future work.
