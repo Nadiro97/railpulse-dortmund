@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "railpulse-dortmund"
+version = "0.1.0"
+description = "Deutsche Bahn rail timetable-update analytics at Dortmund railway stations"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+  "duckdb>=1.1,<2.0",
+  "huggingface_hub>=0.25,<2.0",
+]
+
+[project.optional-dependencies]
+dashboard = ["streamlit>=1.36,<2.0", "pandas>=2.1,<3.0", "plotly>=5.20,<7.0"]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+railpulse = "railpulse.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["railpulse*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
