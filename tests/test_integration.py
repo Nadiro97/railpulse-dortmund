@@ -1,4 +1,4 @@
-"""Local test with synthetic records only; no third-party dataset is committed."""
+"""Synthetic integration test: no Deutsche Bahn records are included."""
 import csv
 import pytest
 from railpulse.pipeline import ingest_dortmund, quoted
@@ -34,12 +34,14 @@ def test_end_to_end_synthetic_parquet(tmp_path):
     assert output.is_file()
     assert meta["dortmund_rows"] == 4
     report_files = build_reports(output, tmp_path / "reports")
-    assert len(report_files) == 5
+    assert len(report_files) == 7
     with (tmp_path / "reports" / "quality.csv").open(newline="") as file:
         quality = next(csv.DictReader(file))
     assert int(quality["cancelled_arrival_records"]) == 1
     assert int(quality["eligible_changed_arrivals"]) == 2
+    assert int(quality["planned_arrivals_without_changed_time"]) == 0
     with (tmp_path / "reports" / "by_station.csv").open(newline="") as file:
         first_station = next(csv.DictReader(file))
     assert first_station["station_name"] == "Dortmund Hbf"
     assert abs(float(first_station["mean_changed_arrival_delta_min"]) - 4.0) < 0.01
+    assert (tmp_path / "reports" / "by_day.csv").is_file()
