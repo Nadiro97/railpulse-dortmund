@@ -117,6 +117,60 @@ with tab_types:
     )
     st.dataframe(by_type, hide_index=True, use_container_width=True)
 
+# Separate observed-update audit — never conflate this sample with all services.
+validated_files = [
+    "validated_quality", "validated_by_station",
+    "validated_by_train_type", "validated_by_hour"
+]
+st.divider()
+st.subheader("Explicit timetable update validation")
+st.caption(
+    "This independent audit uses non-null arrival updates recorded in the upstream "
+    "parsed change snapshots; it does not establish actual vehicle arrival times."
+)
+if all((reports / f"{name}.csv").is_file() for name in validated_files):
+    verified = {name: pd.read_csv(reports / f"{name}.csv") for name in validated_files}
+    vq = verified["validated_quality"].iloc[0]
+    v1, v2, v3 = st.columns(3)
+    v1.metric("Eligible planned arrivals", f"{int(vq['eligible_scheduled_arrival_rows']):,}")
+    v2.metric("Explicitly updated arrivals", f"{int(vq['eligible_with_explicit_arrival_update']):,}")
+    cover = vq["explicit_update_coverage_pct"]
+    v3.metric("Explicit update coverage", "N/A" if pd.isna(cover) else f"{cover:.1f}%")
+    st.warning(
+        "These are **observed API timetable updates**, not verified physical train arrivals. "
+        "Stations and services with different update coverage must not be directly "
+        "ranked as if this were a complete population sample."
+    )
+    min_valid = st.number_input(
+        "Minimum explicit updates for the validated station chart",
+        min_value=1, value=100, step=50, key="validated_minimum"
+    )
+    vs = verified["validated_by_station"].copy()
+    vs = vs[vs["explicit_update_rows"] >= min_valid]
+    if not vs.empty:
+        st.plotly_chart(
+            px.bar(
+                vs.sort_values("median_explicit_update_delta_min", ascending=False),
+                x="median_explicit_update_delta_min", y="station_name", orientation="h",
+                hover_data=["explicit_update_rows", "explicit_update_coverage_pct"],
+                title="Explicitly observed updates — median planned-vs-updated time difference",
+                labels={"station_name": "Station",
+                        "median_explicit_update_delta_min": "Median update difference (min)"}
+            ).update_layout(yaxis={"categoryorder": "total ascending"}),
+            use_container_width=True,
+        )
+    st.dataframe(verified["validated_by_station"], use_container_width=True, hide_index=True)
+    with st.expander("Explicit-update validation diagnostics and by-type coverage"):
+        st.dataframe(verified["validated_quality"], use_container_width=True, hide_index=True)
+        st.dataframe(verified["validated_by_train_type"], use_container_width=True, hide_index=True)
+        st.dataframe(verified["validated_by_hour"], use_container_width=True, hide_index=True)
+else:
+    st.info(
+        "Explicit-update validation not loaded yet. Run "
+        "`python -m railpulse validate-updates --month 2026-09`, "
+        "or download its aggregated GitHub Actions artifact into `reports/`."
+    )
+
 st.divider()
 st.caption(
     "Source: Deutsche Bahn timetable updates, CC BY 4.0; archive by Piet Brömmel. "
