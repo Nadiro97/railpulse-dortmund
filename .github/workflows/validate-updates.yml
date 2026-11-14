@@ -1,0 +1,60 @@
+name: Validate explicit Deutsche Bahn arrival updates
+
+on:
+  workflow_dispatch:
+    inputs:
+      month:
+        description: 'Historical processed and parsed change release (YYYY-MM)'
+        required: true
+        default: '2026-09'
+  push:
+    paths:
+      - '.github/workflows/validate-updates.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: railpulse-validate-explicit-updates
+  cancel-in-progress: false
+
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      HF_HUB_DISABLE_PROGRESS_BARS: '1'
+      MONTH: ${{ github.event_name == 'workflow_dispatch' && inputs.month || '2026-09' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: Validate the pipeline against synthetic fixtures
+        run: python -m pytest -q
+      - name: Download and extract processed Dortmund records into ephemeral runner storage
+        run: |
+          python -m railpulse download --month "$MONTH"
+          python -m railpulse extract --month "$MONTH"
+      - name: Download parsed change snapshots and audit explicit arrival-time updates
+        run: python -m railpulse validate-updates --month "$MONTH"
+      - name: Check output files for unintended source records
+        shell: bash
+        run: |
+          test -f reports/validated_quality.csv
+          if find reports -type f | grep -E '\.(parquet|duckdb|sqlite|db|xml|pb)$'; then
+            echo 'Unexpected row-level file in report output' >&2
+            exit 1
+          fi
+      - name: Upload only aggregated evidence for 7 days
+        uses: actions/upload-artifact@v4
+        with:
+          name: dortmund-explicit-updates-${{ env.MONTH }}
+          path: |
+            reports/validated_*.csv
+            reports/validated_provenance.json
+          retention-days: 7
+          if-no-files-found: error
