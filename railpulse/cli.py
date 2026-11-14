@@ -1,4 +1,4 @@
-"""Command-line interface for a local-only data pipeline."""
+"""Command-line interface for the local railway ETL and validation pipeline."""
 import argparse
 from pathlib import Path
 from .config import DEFAULT_MONTH, checked_month, source_filename
@@ -9,7 +9,7 @@ from .analytics import build_reports
 def main(argv=None):
     parser = argparse.ArgumentParser(description="RailPulse Dortmund ETL")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("download", "extract", "analyze", "run"):
+    for name in ("download", "extract", "analyze", "run", "validate-updates"):
         command = sub.add_parser(name)
         command.add_argument("--month", default=DEFAULT_MONTH, help="YYYY-MM")
         command.add_argument("--data-root", type=Path, default=Path("data"))
@@ -26,6 +26,20 @@ def main(argv=None):
     if args.command in ("analyze", "run"):
         for path in build_reports(processed, Path("reports")):
             print(f"Report: {path}")
+    if args.command == "validate-updates":
+        from .observed_updates import change_filename, download_change_month, validate_month
+        change = args.data_root / "raw" / change_filename(month)
+        if not processed.is_file():
+            raise FileNotFoundError(
+                f"Missing Dortmund processed file: {processed}. "
+                "Run 'python -m railpulse download' and 'python -m railpulse extract' first."
+            )
+        if not change.is_file():
+            change = download_change_month(month, args.data_root)
+        paths, metadata = validate_month(month, processed, change)
+        print(f"Validated explicit updates for {metadata['processed_dortmund_rows']:,} Dortmund rows")
+        for path in paths:
+            print(f"Aggregate: {path}")
 
 if __name__ == "__main__":
     main()
