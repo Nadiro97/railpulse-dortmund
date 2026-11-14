@@ -9,7 +9,7 @@ def test_aggregate_queries():
     }
     assert "median_changed_arrival_delta_min" in queries["by_station"]
     assert "p90_changed_arrival_delta_min" in queries["by_station"]
-    assert "scheduled_arrival_change_coverage_pct" in queries["quality"]
+    assert "processed_arrival_timestamp_presence_pct" in queries["quality"]
     assert "COUNT(*)" in queries["quality"]
 
 def test_missing_change_is_not_on_time():
