@@ -44,6 +44,10 @@ Run the [validation workflow](https://github.com/Nadiro97/railpulse-dortmund/act
 
 ## Experimental machine-learning baseline — Milestone 3
 
+**First real test result:** September's leakage-aware logistic baseline achieved **ROC AUC 0.816**, **average precision 0.535** and **Brier 0.102** versus constant-prevalence ROC AUC 0.500 / average precision 0.160 / Brier 0.135. **Recall is only 32.5% at a 0.5 threshold**. [Read the evaluation and its limitations](docs/ML_RESULTS_2026_09.md); these labels are **retrospective timetable updates, not independently verified physical delays**.
+
+
+
 A chronological logistic-regression baseline predicts **whether the latest explicitly recorded arrival-time update is 6+ minutes after schedule** using *only* station, train category, scheduled hour, and scheduled weekday. The constant-prevalence baseline provides a no-skill comparison. The first 20 days of a month train the model and days 21–end evaluate it; no future timetable updates are features.
 
 **This is a timetable-update prediction, not independently verified actual train punctuality.** The sample includes only stops with explicit updates, so selection effects remain. See [full ML methodology](docs/ML_BASELINE.md) and the [reproducible ML workflow](https://github.com/Nadiro97/railpulse-dortmund/actions/workflows/ml-baseline.yml).
