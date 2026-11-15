@@ -171,6 +171,47 @@ else:
         "or download its aggregated GitHub Actions artifact into `reports/`."
     )
 
+# Optional historical baseline metrics; only aggregates, never model artifacts or raw rows.
+baseline_metrics = reports / "ml_baseline_metrics.json"
+st.divider()
+st.subheader("Experimental ML baseline")
+st.caption(
+    "Predicts whether a retrospectively recorded timetable arrival-time update is "
+    "6+ minutes later than scheduled; not actual train arrival delay prediction. "
+    "Training uses earlier calendar days, testing later days."
+)
+if baseline_metrics.is_file():
+    import json
+    ml = json.loads(baseline_metrics.read_text(encoding="utf-8"))
+    st.warning(
+        "Model evaluation includes only stops with explicit recorded arrival updates; "
+        "this subset may be biased. A model beating the baseline does not establish "
+        "causes or real-world delay-reduction benefits."
+    )
+    model = ml["logistic_regression"]
+    constant = ml["prevalence_baseline"]
+    ma, mb, mc = st.columns(3)
+    ma.metric("Train records", f"{ml['train_n']:,}")
+    mb.metric("Later test records", f"{ml['test_n']:,}")
+    mc.metric("Test ROC AUC", "N/A" if model["roc_auc"] is None else f"{model['roc_auc']:.3f}")
+    comparison = pd.DataFrame([
+        {"model": "Constant prevalence", "ROC AUC": constant["roc_auc"],
+         "Average precision": constant["average_precision"], "Brier": constant["brier"]},
+        {"model": "Logistic regression", "ROC AUC": model["roc_auc"],
+         "Average precision": model["average_precision"], "Brier": model["brier"]},
+    ])
+    st.dataframe(comparison, use_container_width=True, hide_index=True)
+    st.caption(
+        f"Train: {ml['train_window'][0]}–{ml['train_window'][1]}; "
+        f"Test: {ml['test_window'][0]}–{ml['test_window'][1]}. "
+        "Lower Brier is better, higher ROC AUC and average precision are better."
+    )
+else:
+    st.info(
+        "No baseline metrics yet. Run `python -m railpulse ml-baseline --month 2026-09`, "
+        "or download the ML GitHub Actions metrics artifact into `reports/`."
+    )
+
 st.divider()
 st.caption(
     "Source: Deutsche Bahn timetable updates, CC BY 4.0; archive by Piet Brömmel. "
