@@ -42,6 +42,19 @@ streamlit run dashboard/app.py
 
 Run the [validation workflow](https://github.com/Nadiro97/railpulse-dortmund/actions/workflows/validate-updates.yml) on GitHub to produce **aggregate-only** evidence without committing raw train records. See the [validation method](docs/EXPLICIT_UPDATES_VALIDATION.md). The dashboard displays these metrics in a separate section to avoid mistaking predicted timetable changes for verified punctuality.
 
+## Experimental machine-learning baseline — Milestone 3
+
+A chronological logistic-regression baseline predicts **whether the latest explicitly recorded arrival-time update is 6+ minutes after schedule** using *only* station, train category, scheduled hour, and scheduled weekday. The constant-prevalence baseline provides a no-skill comparison. The first 20 days of a month train the model and days 21–end evaluate it; no future timetable updates are features.
+
+**This is a timetable-update prediction, not independently verified actual train punctuality.** The sample includes only stops with explicit updates, so selection effects remain. See [full ML methodology](docs/ML_BASELINE.md) and the [reproducible ML workflow](https://github.com/Nadiro97/railpulse-dortmund/actions/workflows/ml-baseline.yml).
+
+```bash
+pip install -e '.[ml,dev]'
+python -m railpulse ml-baseline --month 2026-09
+```
+
+The ML run writes only `reports/ml_baseline_metrics.json` and `reports/ml_baseline_comparison.csv`, never row-level records or model artifacts, to downloadable aggregate-only CI artifacts.
+
 ## Pipeline
 
 `Hugging Face monthly_processed_data/*.parquet` → select Dortmund station records with DuckDB → validate missing values, cancellations and plan coverage → calculate planned-vs-changed arrival time differences → CSV summaries → local Streamlit dashboard.
