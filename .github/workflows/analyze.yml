@@ -7,9 +7,6 @@ on:
         description: "Processed data release (YYYY-MM)"
         required: true
         default: "2026-09"
-  push:
-    paths:
-      - ".github/workflows/analyze.yml"
 
 permissions:
   contents: read

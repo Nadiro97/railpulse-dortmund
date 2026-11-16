@@ -7,9 +7,6 @@ on:
         description: 'Historical processed and parsed change release (YYYY-MM)'
         required: true
         default: '2026-09'
-  push:
-    paths:
-      - '.github/workflows/validate-updates.yml'
 
 permissions:
   contents: read

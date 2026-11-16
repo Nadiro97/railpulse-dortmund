@@ -10,9 +10,6 @@ on:
         description: "Next unseen evaluation month"
         required: true
         default: "2026-10"
-  push:
-    paths:
-      - ".github/workflows/ml-cross-month.yml"
 permissions:
   contents: read
 concurrency:

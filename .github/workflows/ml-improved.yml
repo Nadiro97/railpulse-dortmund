@@ -6,11 +6,6 @@ on:
         description: "Dataset month YYYY-MM"
         required: true
         default: "2026-09"
-  push:
-    paths:
-      - ".github/workflows/ml-improved.yml"
-      - "railpulse/ml_improved.py"
-      - "tests/test_ml_improved.py"
 permissions:
   contents: read
 concurrency:

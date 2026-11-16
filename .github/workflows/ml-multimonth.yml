@@ -1,11 +1,5 @@
 name: Multi-month model diagnostics (October already inspected)
 on:
-  push:
-    paths:
-      - ".github/workflows/ml-multimonth.yml"
-      - "railpulse/ml_multimonth.py"
-      - "railpulse/cli.py"
-      - "tests/test_ml_multimonth.py"
   workflow_dispatch:
 
 permissions:

@@ -7,9 +7,6 @@ on:
         description: "Month to use for chronological train/test split (YYYY-MM)"
         required: true
         default: "2026-09"
-  push:
-    paths:
-      - ".github/workflows/ml-baseline.yml"
 
 permissions:
   contents: read
