@@ -212,6 +212,42 @@ else:
         "or download the ML GitHub Actions metrics artifact into `reports/`."
     )
 
+# Model improvements selected on validation-only September dates.
+improved_metrics = reports / "ml_improved_metrics.json"
+st.divider()
+st.subheader("Validation-tuned model comparison")
+if improved_metrics.is_file():
+    import json
+    tuned = json.loads(improved_metrics.read_text(encoding="utf-8"))
+    selected = tuned["selected_model"]
+    rows = []
+    for model_name, values in tuned["test"].items():
+        row = values["validation_selected_threshold"]
+        ranking = values["ranking"]
+        rows.append({
+            "Model": model_name,
+            "Chosen on validation": model_name == selected,
+            "Validation-picked threshold": row["threshold"],
+            "Recall (test)": row["recall"],
+            "Precision (test)": row["precision"],
+            "F2 (test)": row["f2"],
+            "ROC AUC (test)": ranking["roc_auc"],
+            "Average precision (test)": ranking["average_precision"],
+        })
+    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    st.caption(
+        f"Model: {selected}; threshold: {tuned['selected_threshold']}. "
+        f"Training {tuned['train_window'][0]}–{tuned['train_window'][1]}, "
+        f"validation {tuned['validation_window'][0]}–{tuned['validation_window'][1]}, "
+        f"held-out test {tuned['test_window'][0]}–{tuned['test_window'][1]}."
+    )
+    st.warning(
+        "Improvements on this historical test may not generalize to later months. "
+        "The target describes retrospectively recorded timetable updates, not verified train arrivals."
+    )
+else:
+    st.info("Run `python -m railpulse ml-improve --month 2026-09` or download the aggregate-only workflow artifact to `reports/`.")
+
 st.divider()
 st.caption(
     "Source: Deutsche Bahn timetable updates, CC BY 4.0; archive by Piet Brömmel. "
