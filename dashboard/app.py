@@ -284,6 +284,28 @@ else:
         "--month 2026-09 --test-month 2026-10` or place its aggregate artifact in `reports/`."
     )
 
+# Exploratory 4-month development comparison (October was already inspected).
+multimonth = reports / "ml_multimonth_comparison.csv"
+st.divider()
+st.subheader("Multi-month model diagnostics")
+if multimonth.is_file():
+    data = pd.read_csv(multimonth)
+    st.warning(
+        "The October dataset was previously inspected. This comparison is **exploratory**, "
+        "not an independent blind test. No candidate is promoted automatically."
+    )
+    st.dataframe(data, use_container_width=True, hide_index=True)
+    st.caption(
+        "Models trained on July–August; September used for validation; "
+        "October used only for previously inspected diagnostics. "
+        "Precision, recall and false-alert counts must be considered together."
+    )
+else:
+    st.info(
+        "Run `python -m railpulse ml-multimonth` or download the aggregate-only "
+        "multi-month GitHub Actions artifact into `reports/`."
+    )
+
 st.divider()
 st.caption(
     "Source: Deutsche Bahn timetable updates, CC BY 4.0; archive by Piet Brömmel. "
