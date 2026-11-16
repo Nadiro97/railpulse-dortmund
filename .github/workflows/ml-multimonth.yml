@@ -4,6 +4,7 @@ on:
     paths:
       - ".github/workflows/ml-multimonth.yml"
       - "railpulse/ml_multimonth.py"
+      - "railpulse/cli.py"
       - "tests/test_ml_multimonth.py"
   workflow_dispatch:
 
