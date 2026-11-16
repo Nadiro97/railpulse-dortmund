@@ -9,10 +9,12 @@ from .analytics import build_reports
 def main(argv=None):
     parser = argparse.ArgumentParser(description="RailPulse Dortmund ETL")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve"):
+    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month"):
         command = sub.add_parser(name)
         command.add_argument("--month", default=DEFAULT_MONTH, help="YYYY-MM")
         command.add_argument("--data-root", type=Path, default=Path("data"))
+    cross = sub.choices["ml-cross-month"]
+    cross.add_argument("--test-month", default="2026-10", help="Unseen next month YYYY-MM")
     args = parser.parse_args(argv)
     month = checked_month(args.month)
     source = args.data_root / "raw" / source_filename(month)
@@ -26,6 +28,22 @@ def main(argv=None):
     if args.command in ("analyze", "run"):
         for path in build_reports(processed, Path("reports")):
             print(f"Report: {path}")
+    if args.command == "ml-cross-month":
+        from .ml_cross_month import run_cross_month
+        from .download import download_month
+        for selected in (month, checked_month(args.test_month)):
+            monthly_source = args.data_root / "raw" / source_filename(selected)
+            monthly_processed = args.data_root / "processed" / f"dortmund_{selected}.parquet"
+            if not monthly_processed.is_file():
+                if not monthly_source.is_file():
+                    monthly_source = download_month(selected, args.data_root)
+                ingest_dortmund(monthly_source, args.data_root)
+        results = run_cross_month(month, args.test_month, args.data_root)
+        report = results["unseen_month_holdout"]["selected_model"]
+        print(f"Unseen {args.test_month} records: {results['unseen_month_holdout']['sample_n']:,}")
+        print(f"ROC AUC: {report['ranking']['roc_auc']}; recall at locked 0.225: {report['locked_alert_threshold']['recall']}")
+        print("Metrics: reports/ml_cross_month_metrics.json")
+        return
     if args.command in ("validate-updates", "ml-baseline", "ml-improve"):
         from .observed_updates import change_filename, download_change_month, validate_month
         change = args.data_root / "raw" / change_filename(month)
