@@ -9,7 +9,7 @@ from .analytics import build_reports
 def main(argv=None):
     parser = argparse.ArgumentParser(description="RailPulse Dortmund ETL")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline"):
+    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve"):
         command = sub.add_parser(name)
         command.add_argument("--month", default=DEFAULT_MONTH, help="YYYY-MM")
         command.add_argument("--data-root", type=Path, default=Path("data"))
@@ -26,7 +26,7 @@ def main(argv=None):
     if args.command in ("analyze", "run"):
         for path in build_reports(processed, Path("reports")):
             print(f"Report: {path}")
-    if args.command in ("validate-updates", "ml-baseline"):
+    if args.command in ("validate-updates", "ml-baseline", "ml-improve"):
         from .observed_updates import change_filename, download_change_month, validate_month
         change = args.data_root / "raw" / change_filename(month)
         if not processed.is_file():
@@ -41,12 +41,18 @@ def main(argv=None):
             print(f"Validated explicit updates for {metadata['processed_dortmund_rows']:,} Dortmund rows")
             for path in paths:
                 print(f"Aggregate: {path}")
-        else:
+        elif args.command == "ml-baseline":
             from .ml_baseline import run_baseline
             report = run_baseline(month, processed, change)
             print(f"ML baseline train_n={report['train_n']}, test_n={report['test_n']}")
             print(f"Test ROC AUC: {report['logistic_regression']['roc_auc']}")
             print("Metrics: reports/ml_baseline_metrics.json")
+        else:
+            from .ml_improved import run_improved
+            result = run_improved(month, processed, change)
+            print(f"Selected model: {result['selected_model']}")
+            print(f"Validation-selected threshold: {result['selected_threshold']}")
+            print("Metrics: reports/ml_improved_metrics.json")
 
 if __name__ == "__main__":
     main()
