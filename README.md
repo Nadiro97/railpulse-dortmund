@@ -71,6 +71,8 @@ We **retain both configurations** for reproducibility: the preferred model is ge
 
 ## Out-of-month test — September-trained model → October 2026
 
+**October 2026 external-month result:** The fixed September-trained model scored **ROC AUC 0.769, recall 53.9%, precision 36.5%, accuracy 79.3%** at the locked 0.225 threshold, compared with September **ROC AUC 0.817, recall 58.0%, precision 45.7%, accuracy 82.2%**. This is a **performance decline**, particularly in false alerts. [See the real out-of-month results](docs/OUT_OF_MONTH_RESULTS_2026_10.md). We retain this as a research benchmark, **not a production passenger-warning system**.
+
 Our current alert policy is **locked**: logistic regression trained on **September 1–16**, chosen using the **September 17–20** validation period, and a fixed probability alert threshold of **0.225**. We now test it on **October 2026** without learning from October records. September 21–30 remains a reference holdout.
 
 Reproduce with `python -m railpulse ml-cross-month --month 2026-09 --test-month 2026-10`, or run the [cross-month validation workflow](https://github.com/Nadiro97/railpulse-dortmund/actions/workflows/ml-cross-month.yml). All downloaded railway records are excluded from GitHub; the workflow uploads aggregated metrics only. See [methodology and limitations](docs/OUT_OF_MONTH_VALIDATION.md).
