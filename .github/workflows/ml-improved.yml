@@ -9,6 +9,8 @@ on:
   push:
     paths:
       - ".github/workflows/ml-improved.yml"
+      - "railpulse/ml_improved.py"
+      - "tests/test_ml_improved.py"
 permissions:
   contents: read
 concurrency:
