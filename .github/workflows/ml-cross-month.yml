@@ -1,0 +1,54 @@
+name: Validate locked model on unseen October 2026
+on:
+  workflow_dispatch:
+    inputs:
+      train_month:
+        description: "Preselected model reference month"
+        required: true
+        default: "2026-09"
+      test_month:
+        description: "Next unseen evaluation month"
+        required: true
+        default: "2026-10"
+  push:
+    paths:
+      - ".github/workflows/ml-cross-month.yml"
+permissions:
+  contents: read
+concurrency:
+  group: railpulse-cross-month
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TRAIN_MONTH: ${{ github.event_name == 'workflow_dispatch' && inputs.train_month || '2026-09' }}
+      TEST_MONTH: ${{ github.event_name == 'workflow_dispatch' && inputs.test_month || '2026-10' }}
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      HF_HUB_DISABLE_PROGRESS_BARS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install machine learning dependencies
+        run: python -m pip install -e '.[ml,dev]'
+      - name: Run synthetic no-leakage tests
+        run: python -m pytest -q
+      - name: Download licensed source records into ephemeral runner only; evaluate unseen month
+        run: python -m railpulse ml-cross-month --month "$TRAIN_MONTH" --test-month "$TEST_MONTH"
+      - name: Verify aggregate-only outputs
+        run: |
+          test -f reports/ml_cross_month_metrics.json
+          test -f reports/ml_cross_month_comparison.csv
+          test -z "$(find reports -type f | grep -E '\.(parquet|duckdb|sqlite|db|xml|pb)$' || true)"
+      - name: Upload summary metrics only
+        uses: actions/upload-artifact@v4
+        with:
+          name: railpulse-cross-month-${{ env.TRAIN_MONTH }}-to-${{ env.TEST_MONTH }}
+          path: |
+            reports/ml_cross_month_metrics.json
+            reports/ml_cross_month_comparison.csv
+          retention-days: 7
+          if-no-files-found: error
