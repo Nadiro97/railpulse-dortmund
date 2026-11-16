@@ -9,7 +9,7 @@ from .analytics import build_reports
 def main(argv=None):
     parser = argparse.ArgumentParser(description="RailPulse Dortmund ETL")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month"):
+    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth"):
         command = sub.add_parser(name)
         command.add_argument("--month", default=DEFAULT_MONTH, help="YYYY-MM")
         command.add_argument("--data-root", type=Path, default=Path("data"))
@@ -28,6 +28,14 @@ def main(argv=None):
     if args.command in ("analyze", "run"):
         for path in build_reports(processed, Path("reports")):
             print(f"Report: {path}")
+    if args.command == "ml-multimonth":
+        from .ml_multimonth import run_multi_month
+        report = run_multi_month(args.data_root)
+        print(f"Training: {', '.join(report['training_months'])}")
+        print(f"Validation: {report['validation_month']}; benchmark: {report['benchmark_month']} (previously inspected)")
+        print(f"Proposed candidate: {report['chosen_candidate']} at {report['candidate_threshold']}")
+        print("Metrics: reports/ml_multimonth_metrics.json")
+        return
     if args.command == "ml-cross-month":
         from .ml_cross_month import run_cross_month
         from .download import download_month
