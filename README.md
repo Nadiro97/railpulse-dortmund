@@ -69,6 +69,14 @@ We **retain both configurations** for reproducibility: the preferred model is ge
 
 **Important:** the outcome is an **archived explicit API timetable update**, which may be a prediction, not a verified physical arrival. We will revalidate on later months before calling this a generalizable model.
 
+## Out-of-month test — September-trained model → October 2026
+
+Our current alert policy is **locked**: logistic regression trained on **September 1–16**, chosen using the **September 17–20** validation period, and a fixed probability alert threshold of **0.225**. We now test it on **October 2026** without learning from October records. September 21–30 remains a reference holdout.
+
+Reproduce with `python -m railpulse ml-cross-month --month 2026-09 --test-month 2026-10`, or run the [cross-month validation workflow](https://github.com/Nadiro97/railpulse-dortmund/actions/workflows/ml-cross-month.yml). All downloaded railway records are excluded from GitHub; the workflow uploads aggregated metrics only. See [methodology and limitations](docs/OUT_OF_MONTH_VALIDATION.md).
+
+**Model outcome:** a retrospectively recorded explicit arrival-time update of **6 minutes or more**, **not** an independently confirmed physical arrival delay.
+
 ## Pipeline
 
 `Hugging Face monthly_processed_data/*.parquet` → select Dortmund station records with DuckDB → validate missing values, cancellations and plan coverage → calculate planned-vs-changed arrival time differences → CSV summaries → local Streamlit dashboard.
