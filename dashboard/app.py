@@ -248,6 +248,42 @@ if improved_metrics.is_file():
 else:
     st.info("Run `python -m railpulse ml-improve --month 2026-09` or download the aggregate-only workflow artifact to `reports/`.")
 
+# An out-of-month validation should be viewed separately from September tuning.
+cross_month = reports / "ml_cross_month_metrics.json"
+st.divider()
+st.subheader("Out-of-month model check")
+if cross_month.is_file():
+    import json
+    external = json.loads(cross_month.read_text(encoding="utf-8"))
+    periods = [
+        ("September reference holdout", external["reference_september_holdout"]),
+        ("October unseen month", external["unseen_month_holdout"]),
+    ]
+    rows = []
+    for title, values in periods:
+        rank = values["selected_model"]["ranking"]
+        alert = values["selected_model"]["locked_alert_threshold"]
+        rows.append({
+            "Period": title, "Records": values["sample_n"],
+            "Positive fraction": values["positive_fraction"],
+            "ROC AUC": rank["roc_auc"], "Average precision": rank["average_precision"],
+            "Accuracy": alert["accuracy"], "Recall": alert["recall"],
+            "Precision": alert["precision"], "F1": alert["f1"],
+        })
+    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    st.warning(
+        "October is a truly unseen month; the chosen September model and alert threshold "
+        "were held fixed. Lower precision means more false alerts. "
+        "This is experimental retrospective timetable-update classification, "
+        "NOT verified train-arrival delay prediction."
+    )
+    st.caption("Locked model: logistic regression; alert threshold: 0.225. See docs/OUT_OF_MONTH_RESULTS_2026_10.md.")
+else:
+    st.info(
+        "For external-month performance, run `python -m railpulse ml-cross-month "
+        "--month 2026-09 --test-month 2026-10` or place its aggregate artifact in `reports/`."
+    )
+
 st.divider()
 st.caption(
     "Source: Deutsche Bahn timetable updates, CC BY 4.0; archive by Piet Brömmel. "
