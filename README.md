@@ -85,6 +85,12 @@ The new research comparison trains on **July and August 2026**, uses **September
 
 Run `python -m railpulse ml-multimonth` after `pip install -e '.[ml,dev]'`, or use the [multi-month workflow](https://github.com/Nadiro97/railpulse-dortmund/actions/workflows/ml-multimonth.yml). Read [methodology](docs/MULTIMONTH_DIAGNOSTICS.md). The published artifacts contain **aggregates only**. The current September-selected logistic model remains the research reference until a new, genuinely untouched month supports a promotion decision.
 
+## Four-month diagnostics and reliability guardrails
+
+**Exploratory October 2026 comparison:** The July–August-trained logistic candidate with a **September-selected 0.325 alert threshold** produced **7,460 false alerts** in October, against **17,054** for our existing September-trained 0.225-threshold reference. This represents **56% fewer false alerts**, but recall dropped from **53.9% to 36.7%**. Its ROC AUC stayed about 0.77. Because October results were previously inspected, **we have not promoted this candidate**. See [the multi-month results](docs/MULTIMONTH_RESULTS_2026_10.md).
+
+**CI reliability:** Every push automatically runs dependency validation, syntax compilation, unit/integration tests, and **CLI–workflow contract tests**. The contract tests parse each GitHub Actions YAML workflow and verify that every `python -m railpulse <command>` actually exists and accepts `--help`. This catches missing CLI registrations before attempting large archive downloads. Heavy data workflows run manually rather than on each push.
+
 ## Pipeline
 
 `Hugging Face monthly_processed_data/*.parquet` → select Dortmund station records with DuckDB → validate missing values, cancellations and plan coverage → calculate planned-vs-changed arrival time differences → CSV summaries → local Streamlit dashboard.

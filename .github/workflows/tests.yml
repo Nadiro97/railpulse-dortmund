@@ -15,7 +15,12 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -e '.[ml,dev]'
-      - run: python -m pytest -q
+      - name: Check Python syntax
+        run: python -m compileall -q railpulse dashboard tests
+      - name: Verify installed dependencies
+        run: python -m pip check
+      - name: Test CLI commands, workflow contracts and model logic
+        run: python -m pytest -q
       - name: Prevent accidental data and secret commits
         shell: bash
         run: |
