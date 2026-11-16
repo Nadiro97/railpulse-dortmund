@@ -79,6 +79,12 @@ Reproduce with `python -m railpulse ml-cross-month --month 2026-09 --test-month 
 
 **Model outcome:** a retrospectively recorded explicit arrival-time update of **6 minutes or more**, **not** an independently confirmed physical arrival delay.
 
+## Multi-month experiment — reducing false alerts
+
+The new research comparison trains on **July and August 2026**, uses **September 2026** for model/threshold choice, and reports October as an **already inspected historical benchmark**, not a fresh blind test. We prioritize alert precision with a predeclared **55% validation precision** requirement, then measure how many 6+ minute timetable updates are caught and how many false alerts arise per 1,000 eligible stops. If the target cannot be met, no new model is promoted.
+
+Run `python -m railpulse ml-multimonth` after `pip install -e '.[ml,dev]'`, or use the [multi-month workflow](https://github.com/Nadiro97/railpulse-dortmund/actions/workflows/ml-multimonth.yml). Read [methodology](docs/MULTIMONTH_DIAGNOSTICS.md). The published artifacts contain **aggregates only**. The current September-selected logistic model remains the research reference until a new, genuinely untouched month supports a promotion decision.
+
 ## Pipeline
 
 `Hugging Face monthly_processed_data/*.parquet` → select Dortmund station records with DuckDB → validate missing values, cancellations and plan coverage → calculate planned-vs-changed arrival time differences → CSV summaries → local Streamlit dashboard.
