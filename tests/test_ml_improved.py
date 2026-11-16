@@ -24,8 +24,10 @@ def fake_data():
     return pd.DataFrame(rows)
 
 def test_disjoint_chronological_split():
-    train, val, test = validation_month_splits(fake_data(), "2026-09")
-    assert (len(train), len(val), len(test)) == (288,72,180) if False else (288,72,180)
+    frame = fake_data()
+    expanded = pd.concat([frame, frame], ignore_index=True)
+    train, val, test = validation_month_splits(expanded, "2026-09")
+    assert (len(train), len(val), len(test)) == (576, 144, 360)
     assert train.planned_date.max() < val.planned_date.min()
     assert val.planned_date.max() < test.planned_date.min()
 
