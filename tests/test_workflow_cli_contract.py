@@ -15,7 +15,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
-CLI_PATTERN = re.compile(r"(?<![\\w.])python(?:3)?\\s+-m\\s+railpulse\\s+([a-z][a-z0-9-]*)")
+CLI_PATTERN = re.compile(r"(?<![\w.])python(?:3)?\s+-m\s+railpulse\s+([a-z][a-z0-9-]*)")
 REQUIRED_WORKFLOW_COMMANDS = {
     "run", "download", "extract", "validate-updates", "ml-baseline",
     "ml-improve", "ml-cross-month", "ml-multimonth",
