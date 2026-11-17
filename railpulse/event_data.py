@@ -28,6 +28,7 @@ MINUTES_CAP = 120.0
 POST_EVENT_MINUTES = 15
 POST_EVENT_HOURS = 9
 PLAN_LEAD_MINUTES = 60
+LABEL_SCHEMA_VERSION = "all-explicit-changes-v2"
 
 
 def plan_filename(month: str) -> str:
@@ -76,9 +77,10 @@ def extract_labels(month: str, mode: str, files: dict, *, rail_only: bool = Fals
     """Return eligible labelled observations in memory plus aggregate coverage.
 
     Features: last PLAN snapshot >=60 minutes before the stop.
-    Label: last explicit CHANGED timestamp recorded from 15 minutes after
-    the stop to 9 hours after it. This reduces but DOES NOT eliminate
-    forecast-vs-actual ambiguity; no actual-arrival claim is made.
+    Proxy label: latest explicit CHANGED timetable timestamp in archived
+    snapshots regardless of snapshot time. A post-event-only observation
+    counter is recorded separately; it is NOT used as a condition for labels.
+    This is NOT verified physical-arrival or -departure ground truth.
     """
     import duckdb
 
@@ -163,22 +165,29 @@ def extract_labels(month: str, mode: str, files: dict, *, rail_only: bool = Fals
                        ORDER BY p.snapshot_timestamp DESC) = 1
         """)
 
-        # Label update must exist in an EXPLICIT parsed change snapshot AFTER
-        # the scheduled event; no post-event status is used as a feature.
+        # An explicit changed timestamp is an archival *timetable update*,
+        # not necessarily a physical arrival/departure. Most archived change
+        # snapshots are recorded before the scheduled event. Forcing a
+        # post-event window here erroneously discards observed updates.
+        #
+        # Count late-recorded snapshots separately so data quality can be
+        # assessed without pretending forecasts are actual times.
         con.execute(f"""
-            CREATE TEMP TABLE recorded_after AS
+            CREATE TEMP TABLE recorded_updates AS
             SELECT c.id, c.eva,
                    arg_max(c.{updated}, c.snapshot_timestamp) AS changed_at,
                    max(c.snapshot_timestamp) AS latest_snapshot,
-                   count(*) AS explicit_post_event_snapshots
+                   count(*) AS explicit_snapshot_count,
+                   count(*) FILTER (
+                       WHERE c.snapshot_timestamp >=
+                           b.scheduled + INTERVAL '{POST_EVENT_MINUTES} minutes'
+                         AND c.snapshot_timestamp <=
+                           b.scheduled + INTERVAL '{POST_EVENT_HOURS} hours'
+                   ) AS explicit_post_event_snapshots
             FROM {change} c
             JOIN base b ON c.id = b.id AND c.eva = b.eva
             WHERE c.{updated} IS NOT NULL
-              AND c.snapshot_timestamp >=
-                  b.scheduled + INTERVAL '{POST_EVENT_MINUTES} minutes'
-              AND c.snapshot_timestamp <=
-                  b.scheduled + INTERVAL '{POST_EVENT_HOURS} hours'
-            GROUP BY c.id, c.eva
+            GROUP BY c.id, c.eva, b.scheduled
         """)
 
         con.execute("""
@@ -189,10 +198,11 @@ def extract_labels(month: str, mode: str, files: dict, *, rail_only: bool = Fals
                    u.changed_at, u.latest_snapshot,
                    date_diff('second', b.scheduled, u.changed_at) / 60.0
                      AS raw_change_minutes,
+                   u.explicit_snapshot_count,
                    u.explicit_post_event_snapshots
             FROM base b
             LEFT JOIN plan_before p USING (id, eva)
-            LEFT JOIN recorded_after u USING (id, eva)
+            LEFT JOIN recorded_updates u USING (id, eva)
         """)
 
         row = con.execute(f"""
@@ -200,7 +210,16 @@ def extract_labels(month: str, mode: str, files: dict, *, rail_only: bool = Fals
                    count(*) FILTER (WHERE plan_snapshot_timestamp IS NOT NULL)
                        AS known_pre_event_plan,
                    count(*) FILTER (WHERE latest_snapshot IS NOT NULL)
+                       AS known_any_explicit_change,
+                   count(*) FILTER (WHERE explicit_post_event_snapshots > 0)
                        AS known_post_event_explicit_change,
+                   count(*) FILTER (
+                       WHERE plan_snapshot_timestamp IS NOT NULL
+                   ) AS known_plan_before_cutoff,
+                   count(*) FILTER (
+                       WHERE plan_snapshot_timestamp IS NOT NULL
+                         AND latest_snapshot IS NOT NULL
+                   ) AS plan_with_any_explicit_change,
                    count(*) FILTER (
                        WHERE plan_snapshot_timestamp IS NOT NULL
                          AND raw_change_minutes BETWEEN -20 AND 180
@@ -234,7 +253,9 @@ def extract_labels(month: str, mode: str, files: dict, *, rail_only: bool = Fals
         """).fetchone()
         columns = [
             "scheduled_eligible", "known_pre_event_plan",
-            "known_post_event_explicit_change", "labelled_eligible",
+            "known_any_explicit_change", "known_post_event_explicit_change",
+            "known_plan_before_cutoff", "plan_with_any_explicit_change",
+            "labelled_eligible",
             "labels_capped_above_120", "implausible_negative",
             "implausible_positive", "ambiguous_dst_records",
             "missing_origin", "missing_destination",
@@ -245,13 +266,30 @@ def extract_labels(month: str, mode: str, files: dict, *, rail_only: bool = Fals
         quality["label_coverage_fraction"] = round(
             quality["labelled_eligible"] / denominator, 6
         ) if denominator else 0.0
+        quality["any_explicit_update_fraction"] = round(
+            quality["known_any_explicit_change"] / denominator, 6
+        ) if denominator else 0.0
+        quality["post_event_explicit_update_fraction"] = round(
+            quality["known_post_event_explicit_change"] / denominator, 6
+        ) if denominator else 0.0
+        quality["pre_event_plan_fraction"] = round(
+            quality["known_plan_before_cutoff"] / denominator, 6
+        ) if denominator else 0.0
+        quality["label_coverage_within_pre_event_plan_fraction"] = (
+            round(quality["labelled_eligible"] /
+                  quality["known_plan_before_cutoff"], 6)
+            if quality["known_plan_before_cutoff"] else 0.0
+        )
         quality.update({
             "month": month,
             "event": mode,
             "pre_event_plan_lead_minutes": PLAN_LEAD_MINUTES,
             "minimum_post_event_minutes": POST_EVENT_MINUTES,
             "post_event_window_hours": POST_EVENT_HOURS,
-            "outcome_source": "explicit parsed changes after scheduled Dortmund event",
+            "label_schema_version": LABEL_SCHEMA_VERSION,
+            "outcome_source": "latest explicitly recorded archived timetable change, independent of snapshot capture time",
+            "target_is_verified_actual_arrival": False,
+            "post_event_observation_is_required": False,
             "is_independent_actual_time": False,
             "missing_updates_are_assumed_on_time": False,
             "rail_only": bool(rail_only),

@@ -72,3 +72,7 @@ git pull
 5. Only then consider passenger-facing claims. Never silently change the ground-truth definition to make MAE smaller.
 
 Underlying source data: Deutsche Bahn timetable records CC BY 4.0, archived and processed by [Piet Brömmel](https://github.com/piebro/deutsche-bahn-data). Independent research project, no endorsement.
+
+## Historical full-month extraction update (v2)
+
+The subsequent history-rail command had an overrestrictive **post-event-only timestamp** requirement that caused zero accepted months. The latest explicitly recorded *timetable changed time*, regardless of snapshot capture time, is now the archival proxy label. A separate post-event snapshot metric is retained to expose how often updates were observed after scheduled stop time. This is a **change of measured target**, not proof of real physical delay. No-update is unknown, not a punctual train. Earlier feature caches are versioned and replaced automatically.

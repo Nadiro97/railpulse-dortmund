@@ -166,6 +166,32 @@ else:
 
 if status.get("training_blocker"):
     st.error("Grund für fehlendes Training: " + status["training_blocker"])
+    quality_file = Path(f"reports/history_rail_{mode}_quality.json")
+    if quality_file.is_file():
+        import json
+        report = json.loads(quality_file.read_text(encoding="utf-8"))
+        detail = report.get("monthly_quality", {})
+        if detail:
+            diagnostic_rows = [{
+                "Monat": month,
+                "Geplante Stops": figures.get("scheduled_eligible"),
+                "Früh verfügbares Plan-Snapshot": figures.get("known_pre_event_plan"),
+                "Explizite Updates (egal wann aufgezeichnet)": figures.get(
+                    "known_any_explicit_change"),
+                "Explizite Updates nach dem geplanten Halt": figures.get(
+                    "known_post_event_explicit_change"),
+                "Verwendbare Labels": figures.get("labelled_eligible"),
+                "Label-Abdeckung": figures.get("label_coverage_fraction"),
+                "Anteil expliziter Updates": figures.get("any_explicit_update_fraction"),
+            } for month, figures in sorted(detail.items())]
+            with st.expander("Monatliche Datenabdeckung und Gründe", expanded=True):
+                st.caption(
+                    "label_coverage_fraction and early-plan availability by month. "
+                    "Post-event snapshot updates are shown separately, not "
+                    "required for the archival-update research label."
+                )
+                st.dataframe(pd.DataFrame(diagnostic_rows),
+                             hide_index=True, use_container_width=True)
     if status.get("excluded_months"):
         with st.expander("Warum wurden Monate ausgeschlossen?"):
             st.dataframe(pd.DataFrame([

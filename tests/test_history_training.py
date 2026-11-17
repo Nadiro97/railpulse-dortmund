@@ -1,6 +1,7 @@
 """Synthetic historical inventory and time-split tests. No real DB records committed."""
 from datetime import date, timedelta
 from pathlib import Path
+import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -13,7 +14,7 @@ from railpulse.history_inventory import (
     split_complete_months, inventory,
 )
 from railpulse.history_train import (
-    _usable_month, cache_path, evaluate_history, run_history,
+    _usable_month, cache_path, coverage_path, extract_cached_month, evaluate_history, run_history,
 )
 
 
@@ -108,6 +109,7 @@ def test_month_quality_floor_requires_observed_updates_not_imputed_zero():
     assert _usable_month({"label_coverage_fraction": .9}, frame)[0]
     ok, reason = _usable_month({"label_coverage_fraction": .1}, frame)
     assert not ok and "coverage" in reason
+    assert reason == "insufficient_archived_update_coverage"
     frame.loc[0, "observed_update_minutes"] = float("nan")
     assert not _usable_month({"label_coverage_fraction": .9}, frame)[0]
 
@@ -173,3 +175,84 @@ def test_cache_uses_private_data_directory_not_public_reports():
     assert cache_path("2025-01", "arrival").as_posix().startswith(
         "data/processed/history_rail/"
     )
+
+
+
+def test_old_post_event_cache_is_automatically_reprocessed(monkeypatch, tmp_path):
+    """Previously rejected months must not stay rejected after the label repair."""
+    from railpulse.event_data import LABEL_SCHEMA_VERSION
+
+    local = tmp_path / "data"
+    old_path = cache_path("2026-09", "departure", local)
+    metadata = coverage_path("2026-09", "departure", local)
+    old_path.parent.mkdir(parents=True)
+    fake_history_frame("2026-09").to_parquet(old_path)
+    metadata.write_text(
+        '{"label_coverage_fraction": 0.001, "month": "2026-09"}',
+        encoding="utf-8",
+    )
+    events = []
+
+    def files(month, root):
+        events.append(("fetch", month))
+        return {"fake": "local-snapshot-files"}
+
+    def extract(month, mode, sources, *, rail_only=False):
+        events.append(("extract", mode, rail_only))
+        return fake_history_frame(month), {
+            "label_coverage_fraction": .88,
+            "post_event_explicit_update_fraction": .01,
+            "label_schema_version": LABEL_SCHEMA_VERSION,
+            "post_event_observation_is_required": False,
+        }
+
+    monkeypatch.setattr("railpulse.history_train.get_month_sources", files)
+    monkeypatch.setattr("railpulse.history_train.extract_labels", extract)
+    frame, metrics = extract_cached_month("2026-09", "departure", root=local)
+    assert len(frame) == 115
+    assert metrics["label_coverage_fraction"] == .88
+    assert events == [("fetch", "2026-09"), ("extract", "departure", True)]
+    assert json.loads(metadata.read_text())["label_schema_version"] == LABEL_SCHEMA_VERSION
+    again, _ = extract_cached_month("2026-09", "departure", root=local)
+    assert len(again) == 115
+    assert len(events) == 2, "Updated cache should be reused without re-extraction"
+
+
+def test_quality_reports_preserve_monthly_diagnostics_for_rejected_months(tmp_path, monkeypatch):
+    from railpulse.event_data import LABEL_SCHEMA_VERSION
+    import json
+
+    def synthetic_inventory(**kw):
+        return {
+            "rows": [
+                {"month": month, "complete_source_triple": True}
+                for month in month_range("2024-07", "2025-04")
+            ],
+            "months_with_all_sources": 10,
+            "months_catalogued": 10,
+            "split": {},
+        }
+
+    def incomplete(month, event, *, root, refresh):
+        return fake_history_frame(month), {
+            "label_schema_version": LABEL_SCHEMA_VERSION,
+            "label_coverage_fraction": .01,
+            "known_any_explicit_change": 42,
+            "known_post_event_explicit_change": 0,
+            "scheduled_eligible": 1000,
+        }
+
+    monkeypatch.setattr("railpulse.history_train.inventory", synthetic_inventory)
+    monkeypatch.setattr("railpulse.history_train.extract_cached_month", incomplete)
+    result = run_history(
+        reports_dir=tmp_path / "reports",
+        model_dir=tmp_path / "models", data_root=tmp_path / "data",
+        mode="departure",
+    )
+    assert not result["training_performed"]
+    report = json.loads(
+        (tmp_path/"reports/history_rail_departure_quality.json").read_text()
+    )
+    assert report["monthly_quality"]["2024-07"]["known_any_explicit_change"] == 42
+    assert report["monthly_quality"]["2024-07"]["label_coverage_fraction"] == .01
+    assert report["excluded_months"]["2024-07"] == "insufficient_archived_update_coverage"

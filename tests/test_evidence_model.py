@@ -118,7 +118,7 @@ def test_unsupported_service_cannot_claim_punctuality():
 
 
 @pytest.mark.parametrize("mode", ["arrival", "departure"])
-def test_snapshot_label_requires_event_time_after_planned_and_early_plan(tmp_path, mode):
+def test_snapshot_label_allows_explicit_pre_event_updates_and_early_plan(tmp_path, mode):
     pytest.importorskip("duckdb")
     start = pd.Timestamp("2026-09-07 08:00:00")
     rows = []
@@ -175,16 +175,25 @@ def test_snapshot_label_requires_event_time_after_planned_and_early_plan(tmp_pat
         frame.to_parquet(path)
         files[key] = path
     out, quality = extract_labels("2026-09", mode, files)
-    assert len(out) == 1
+    # The late-updated service remains labelled, but the pre-event-only
+    # changed-time observation is also a valid ARCHIVED timetable proxy.
+    # Missing post-event snapshots do not mean the service was punctual.
+    assert len(out) == 2
     assert quality["scheduled_eligible"] == 2
-    assert quality["labelled_eligible"] == 1
+    assert quality["labelled_eligible"] == 2
+    assert quality["known_any_explicit_change"] == 2
     assert quality["known_post_event_explicit_change"] == 1
+    assert quality["label_coverage_fraction"] == 1.0
+    assert quality["post_event_explicit_update_fraction"] == 0.5
+    assert quality["post_event_observation_is_required"] is False
     assert quality["missing_updates_are_assumed_on_time"] is False
     assert quality["pre_event_plan_lead_minutes"] == PLAN_LEAD_MINUTES
+    observed = out[out["train_number"] == "999"]
+    assert len(observed) == 2
     assert out.iloc[0]["route_destination"] == "Düsseldorf Hbf"
     assert out.iloc[0]["route_origin"] == "Witten Hbf"
-    assert out.iloc[0]["observed_update_minutes"] == pytest.approx(
-        12 if mode == "arrival" else 12
+    assert sorted(out["observed_update_minutes"].tolist()) == pytest.approx(
+        [0.0, 12.0] if mode == "arrival" else [0.0, 12.0]
     )
     assert out.iloc[0]["train_number"] == "999"
     assert out.iloc[0]["line_number"] == "S1"

@@ -11,7 +11,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .event_data import MODES, extract_labels, get_month_sources
+from .event_data import MODES, LABEL_SCHEMA_VERSION, extract_labels, get_month_sources
 from .evidence_model import (
     MODEL_ROOT, REPORT_ROOT, UNKNOWN, _pipeline, _pred, build_features,
     cohort_errors, metrics,
@@ -20,6 +20,7 @@ from .history_inventory import FIRST_MONTH, inventory, split_complete_months
 
 MIN_MONTH_ROWS = 100
 MIN_LABEL_COVERAGE = 0.50
+# Separate diagnostic rather than silently broadening the training population.
 MIN_TRAIN_ROWS = 1000
 MIN_ROUTE_COUNT = 20
 CANDIDATES = ("always_punctual", "training_mean", "simple_ridge",
@@ -60,7 +61,12 @@ def extract_cached_month(month, mode, *, root=Path("data"), refresh=False):
     path = cache_path(month, mode, root)
     coverage_file = coverage_path(month, mode, root)
     if path.is_file() and coverage_file.is_file() and not refresh:
-        return pd.read_parquet(path), json.loads(coverage_file.read_text(encoding="utf-8"))
+        recorded = json.loads(coverage_file.read_text(encoding="utf-8"))
+        if recorded.get("label_schema_version") == LABEL_SCHEMA_VERSION:
+            return pd.read_parquet(path), recorded
+        # Old cached results were built with a post-event-only label rule
+        # and cannot be reused. Raw source archives stay cached locally.
+
     sources = get_month_sources(month, root)
     data, coverage = extract_labels(month, mode, sources, rail_only=True)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -72,9 +78,9 @@ def extract_cached_month(month, mode, *, root=Path("data"), refresh=False):
 def _usable_month(coverage, frame):
     """Mandatory quality floor, documented and applied BEFORE splitting."""
     if len(frame) < MIN_MONTH_ROWS:
-        return False, "too_few_labelled_rail_stops"
+        return False, "too_few_explicit_archival_updates"
     if coverage.get("label_coverage_fraction", 0.0) < MIN_LABEL_COVERAGE:
-        return False, "insufficient_explicit_post_event_coverage"
+        return False, "insufficient_archived_update_coverage"
     if not {"observed_update_minutes", "planned_date"} <= set(frame.columns):
         return False, "missing_essential_columns"
     if frame["observed_update_minutes"].isna().any():
@@ -249,8 +255,10 @@ def run_history(*, start=FIRST_MONTH, through=None, today=None,
                 exclusions[month] = "download_or_extract_error: " + str(exc)[:250]
                 continue
             ok, reason = _usable_month(qual, frame)
+            # Retain non-sensitive aggregate diagnostics, even for rejected months.
+            coverage[month] = qual
             if ok:
-                cached[month], coverage[month] = cache_path(month, event, data_root), qual
+                cached[month] = cache_path(month, event, data_root)
             else:
                 exclusions[month] = reason
         usable_months = sorted(cached)
@@ -258,6 +266,9 @@ def run_history(*, start=FIRST_MONTH, through=None, today=None,
             summary = {
                 "mode": event, "usable_months": usable_months,
                 "excluded_months": exclusions,
+                "monthly_quality": coverage,
+                "minimum_label_coverage_fraction": MIN_LABEL_COVERAGE,
+                "label_schema_version": LABEL_SCHEMA_VERSION,
                 "error": "At least ten audited, labelled rail months are required.",
             }
             result["modes"][event] = summary

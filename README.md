@@ -4,6 +4,12 @@
 
 **Critical limitation:** Deutsche Bahn's historical changed timetable timestamps are not independently verified actual arrival/departure times. The upstream processed data fills some missing updated timestamps with planned values. **The application must not claim proven real-world punctuality**, and will decline to estimate when validation or coverage is weak.
 
+## All months excluded? Fixed label extraction, not a lower quality standard
+
+Earlier `history-rail` releases required the **latest explicit update to be in a snapshot recorded 15 minutes to nine hours AFTER the scheduled Dortmund stop**. This is not how many archived timetable updates are captured. The strict timestamp condition excluded legitimate archival timetable-change observations before the event. We now label **the latest explicitly recorded timetable changed timestamp, regardless of snapshot capture time**, and independently report the share with actual post-event snapshot observations. The label is a *historical update proxy*, **not independently verified physical punctuality**; no-update records remain unknown.
+
+The new `label_schema_version` marker automatically invalidates old stop-level feature caches that were produced with the post-event-only rule. Already downloaded national source files are reused. Run `python -m railpulse history-rail --mode both` again after `git pull`, then use `python -m railpulse model-status`. If a month still fails, `reports/history_rail_<arrival|departure>_quality.json` now lists its counts and rates to distinguish weak planned-snapshot coverage, absent updates, and unusable labels. The original **50% overall label-coverage threshold and ten-month minimum remain unchanged** pending evidence.
+
 ## Multi-year research estimate versus old quality gate (fixed)
 
 If you previously saw **"Keine belastbare Schätzung" for every route**, the former top-of-page form was loading `models/evidence_minutes_<arrival|departure>.joblib` from the *old four-month experiment* instead of the new model. Run `python -m railpulse model-status` to check separately for newer `models/history_rail_<arrival|departure>_research.joblib` files, completed evaluation reports and failed month-quality reports. The dashboard now uses the multi-year research model **if it exists**, and otherwise explains why the new model is missing. It never silently falls back to the older predictor.
