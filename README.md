@@ -91,6 +91,22 @@ Run `python -m railpulse ml-multimonth` after `pip install -e '.[ml,dev]'`, or u
 
 **CI reliability:** Every push automatically runs dependency validation, syntax compilation, unit/integration tests, and **CLI–workflow contract tests**. The contract tests parse each GitHub Actions YAML workflow and verify that every `python -m railpulse <command>` actually exists and accepts `--help`. This catches missing CLI registrations before attempting large archive downloads. Heavy data workflows run manually rather than on each push.
 
+## Interactive prediction demo — local Streamlit
+
+The dashboard offers a form to choose a **Dortmund railway station**, **train category**, **scheduled arrival hour** and **weekday**. It displays the experimental logistic-regression score for whether a recorded timetable arrival update will be **6+ minutes later than the scheduled time**. It is NOT a live train prediction or independently verified physical arrival forecast. The score has not been calibrated for operational use; the October test showed false alerts.
+
+Run the following locally after cloning the repository:
+
+~~~bash
+python -m pip install -e ".[dashboard,ml,dev]"
+python -m railpulse train-demo
+streamlit run dashboard/app.py
+~~~
+
+Training uses **only September 1–16, 2026** explicitly updated eligible historical stops to reproduce the chosen 0.225-threshold classifier. The downloaded archive, training rows and local JSON coefficient file in **models/** are **Git-ignored**. The public repository contains only training/inference code and synthetic tests; no trained model, per-train records or snapshots are included.
+
+The form works even if the analytic CSV reports have not been generated. It requires a locally trained model. See [the demo methodology](docs/PREDICTION_DEMO.md).
+
 ## Pipeline
 
 `Hugging Face monthly_processed_data/*.parquet` → select Dortmund station records with DuckDB → validate missing values, cancellations and plan coverage → calculate planned-vs-changed arrival time differences → CSV summaries → local Streamlit dashboard.

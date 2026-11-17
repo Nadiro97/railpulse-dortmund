@@ -9,7 +9,7 @@ from .analytics import build_reports
 def main(argv=None):
     parser = argparse.ArgumentParser(description="RailPulse Dortmund ETL")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth"):
+    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth", "train-demo"):
         command = sub.add_parser(name)
         command.add_argument("--month", default=DEFAULT_MONTH, help="YYYY-MM")
         command.add_argument("--data-root", type=Path, default=Path("data"))
@@ -28,6 +28,13 @@ def main(argv=None):
     if args.command in ("analyze", "run"):
         for path in build_reports(processed, Path("reports")):
             print(f"Report: {path}")
+    if args.command == "train-demo":
+        from .demo_model import train_local_model, MODEL_PATH
+        artifact = train_local_model(args.data_root, MODEL_PATH)
+        print(f"Local-only model saved: {MODEL_PATH}")
+        print(f"Trained on {artifact['n_train']:,} archived September 1–16 records.")
+        print("Timetable updates only; not confirmed actual train arrivals.")
+        return
     if args.command == "ml-multimonth":
         from .ml_multimonth import run_multi_month
         report = run_multi_month(args.data_root)

@@ -14,6 +14,58 @@ st.warning(
     "Positive differences are timetable-update deviations, not independently confirmed physical arrival delays."
 )
 
+
+# Local-only interactive model score. The form works without report CSV files.
+st.subheader("Try the experimental prediction demo")
+st.caption(
+    "Choose a scheduled rail stop. The result estimates risk of an archived "
+    "arrival-timetable update of 6+ minutes, NOT a live or verified train delay."
+)
+from railpulse.demo_model import MODEL_PATH, load_artifact, predict_probability
+if MODEL_PATH.is_file():
+    try:
+        demo = load_artifact(MODEL_PATH)
+    except (ValueError, OSError, KeyError, TypeError) as exc:
+        st.error(f"Local model artifact is invalid: {exc}. Retrain with 'python -m railpulse train-demo'.")
+    else:
+        with st.form("timetable_update_demo"):
+            c1, c2 = st.columns(2)
+            with c1:
+                station = st.selectbox("Dortmund rail station", demo["categories"]["station_name"])
+                hour = st.selectbox("Scheduled arrival hour (Europe/Berlin)", list(range(24)), index=8)
+            with c2:
+                category = st.selectbox("Train category", demo["categories"]["train_type"])
+                day = st.selectbox(
+                    "Scheduled weekday",
+                    ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                )
+            calculate = st.form_submit_button("Estimate timetable-update risk")
+        if calculate:
+            chance = predict_probability(
+                demo, station, category, int(hour),
+                ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].index(day) + 1,
+            )
+            st.metric("Model-estimated timetable-update risk", f"{chance:.1%}")
+            st.progress(chance)
+            if chance >= demo["threshold"]:
+                st.warning("Model flag: estimated risk exceeds the reviewed 22.5% alert threshold.")
+            else:
+                st.info("Model score below the reviewed 22.5% alert threshold.")
+            st.caption(
+                "This is an experimental retrospective-score demonstration. "
+                "The percentage is NOT a calibrated personal travel probability or a live train prediction. "
+                "The model was trained on September 1–16, 2026 archive data and "
+                "showed reduced precision on October holdout data."
+            )
+else:
+    st.info(
+        "No local trained model found. Run 'pip install -e \".[dashboard,ml,dev]\"' "
+        "and then 'python -m railpulse train-demo'. "
+        "Training downloads September historical source data to local ignored folders; "
+        "the resulting local JSON coefficients stay in models/."
+    )
+st.divider()
+
 reports = Path("reports")
 required = [
     "quality", "station_quality", "by_station", "by_hour",

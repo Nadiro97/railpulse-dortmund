@@ -25,3 +25,9 @@ build/
 .DS_Store
 .idea/
 .vscode/
+
+# Learned model parameters stay local; never publish serialized models
+/models/
+*.pkl
+*.pickle
+*.joblib
