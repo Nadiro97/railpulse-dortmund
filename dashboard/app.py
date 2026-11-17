@@ -109,6 +109,67 @@ else:
         "after git pull. This downloads large public monthly archives locally."
     )
 st.divider()
+st.subheader("Mehrjährige Datenprüfung · Schienenverkehr")
+st.caption(
+    "Monthly inventory and chronological holdouts for S/RE/RB/ICE/IC/EC "
+    "and other reviewed railway-service codes. Local bus services are excluded. "
+    "Older months may have much narrower station coverage."
+)
+inventory_file = Path("reports/history_month_inventory.json")
+if inventory_file.is_file():
+    import json
+    inventory_report = json.loads(inventory_file.read_text(encoding="utf-8"))
+    monthly = pd.DataFrame(inventory_report["rows"])
+    st.metric("Monate mit allen drei Archiven",
+              f"{inventory_report['months_with_all_sources']} / {inventory_report['months_catalogued']}")
+    st.dataframe(monthly, hide_index=True, use_container_width=True)
+    if inventory_report.get("split"):
+        split = inventory_report["split"]
+        st.caption(
+            f"Quellen-Metadaten-Split: {len(split['train'])} Monate Training, "
+            f"{len(split['validation'])} Validierung, "
+            f"{len(split['test'])} retrospektive Tests. "
+            "Qualitätsprüfungen können Monate vor dem endgültigen Split ausschließen."
+        )
+else:
+    st.info(
+        "Keine historische Quellen-Inventur vorhanden. Zuerst "
+        "python -m railpulse history-rail --inventory-only ausführen — "
+        "keine großen Parquet-Downloads nötig."
+    )
+
+for event in ("arrival", "departure"):
+    path = Path(f"reports/history_rail_{event}_evaluation.json")
+    if not path.is_file():
+        continue
+    import json
+    evaluated = json.loads(path.read_text(encoding="utf-8"))
+    st.subheader(f"Mehrmonats-Backtest: {'Ankunft' if event == 'arrival' else 'Abfahrt'} Dortmund")
+    st.caption(
+        "Retrospektive, bereits erforschte Testmonate; historische API-Zeitplanupdates, "
+        "nicht verifizierte tatsächliche Zugverspätungen."
+    )
+    stats = evaluated["test_overall"]
+    aa, bb, cc = st.columns(3)
+    aa.metric("MAE (Minuten)", f"{stats['mae_minutes']:.1f}")
+    bb.metric("Gewichteter MAE (Minuten)", f"{stats['weighted_mae_minutes']:.1f}")
+    cc.metric("Getestete Stops", f"{stats['n']:,}")
+    st.caption(f"Gewähltes Modell auf Validierung: {evaluated['selected_model']}")
+    monthly_metrics = pd.DataFrame([
+        {"Monat": m, "MAE (Minuten)": r["models"][evaluated["selected_model"]]["mae_minutes"],
+         "Gewichteter MAE": r["models"][evaluated["selected_model"]]["weighted_mae_minutes"],
+         "Stops": r["n"]}
+        for m, r in evaluated["test_monthly"].items()
+    ])
+    if not monthly_metrics.empty:
+        st.plotly_chart(
+            px.line(monthly_metrics, x="Monat", y="MAE (Minuten)", markers=True,
+                    title=f"Archivierte Zeitplanänderung: Testfehler je Monat ({event})"),
+            use_container_width=True,
+        )
+        st.dataframe(monthly_metrics, hide_index=True, use_container_width=True)
+
+st.divider()
 st.subheader("Historical archived timetable analytics (not ground-truth delay statistics)")
 st.caption("These legacy research charts are kept for reproducibility, not live forecasts.")
 

@@ -4,6 +4,26 @@
 
 **Critical limitation:** Deutsche Bahn's historical changed timetable timestamps are not independently verified actual arrival/departure times. The upstream processed data fills some missing updated timestamps with planned values. **The application must not claim proven real-world punctuality**, and will decline to estimate when validation or coverage is weak.
 
+## Multi-year Dortmund rail inventory and retrospective 80/20 evaluation
+
+The **new rail-only historical workflow** audits every complete published month from **July 2024 through the last completed calendar month**. It restricts records to reviewed railway-service codes (S, RB, RE, ICE, IC, EC and other rail codes), excluding buses, and evaluates Dortmund **arrivals and departures separately**.
+
+Run the lightweight source inventory first (no nationwide parquet downloads):
+
+```powershell
+.\.venv\Scripts\python.exe -m railpulse history-rail --inventory-only
+```
+
+If you have ample disk space, memory and network bandwidth, run full historical extraction and research training:
+
+```powershell
+.\.venv\Scripts\python.exe -m railpulse history-rail --mode both
+```
+
+The workflow inventories all three published source formats per month, then extracts only Dortmund rail stop records with pre-event plan information and explicit after-event timetable updates. Monthly quality checks exclude missing or unreliable periods. From **usable whole months**, about 80% are assigned to training/validation (a separate recent validation period) and the newest 20% to retrospective testing. Models are compared using **weighted MAE in minutes** and monthly, category, line and station diagnostics. This is **not yet a validated real-world delay predictor**: historical timetable changes are not confirmed physical arrival observations, and the newest historical months have been examined before.
+
+Results appear in the dashboard's **Mehrjährige Datenprüfung** section once generated. See [step-by-step method and data-volume warnings](docs/HISTORICAL_RAIL_TRAINING.md), or run the [metadata-only inventory workflow](.github/workflows/history-month-inventory.yml).
+
 ## Rebuilt evidence-first pipeline (experimental)
 
 The new implementation uses the raw **plan snapshots** and **explicit change snapshots** rather than treating the processed `delay_in_min` as physical arrival ground truth. It only uses scheduled features from planned snapshots at least **60 minutes before the Dortmund event**, then finds an explicit updated time in snapshots **15 minutes to 9 hours after the scheduled event**. Those late snapshots are still only a *proxy* for the outcome, not verified physical arrival evidence. Missing snapshots are **unknown, never silently punctual**.

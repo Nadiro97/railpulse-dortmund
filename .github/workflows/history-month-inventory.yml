@@ -1,0 +1,41 @@
+name: Monthly archive metadata inventory (no national Parquet download)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install reviewed dependencies
+        run: python -m pip install -e '.[dashboard,ml,dev]'
+      - name: Audit published monthly source paths and split
+        run: python -m railpulse history-rail --inventory-only
+      - name: Validate metadata report
+        shell: bash
+        run: |
+          test -f reports/history_month_inventory.csv
+          test -f reports/history_month_inventory.json
+          python - <<'PY'
+          import json
+          info = json.load(open("reports/history_month_inventory.json"))
+          assert info["is_verified_physical_arrival_data"] is False
+          assert info["is_final_blind_test"] is False
+          assert all(r["split"] in {"train", "validation", "test", "unavailable"}
+                     for r in info["rows"])
+          print("Published source triples:", info["months_with_all_sources"])
+          PY
+      - name: Upload aggregate metadata only
+        uses: actions/upload-artifact@v4
+        with:
+          name: railpulse-month-inventory
+          path: |
+            reports/history_month_inventory.csv
+            reports/history_month_inventory.json
+          retention-days: 7
+          if-no-files-found: error

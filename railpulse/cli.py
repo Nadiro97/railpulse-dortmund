@@ -9,7 +9,7 @@ from .analytics import build_reports
 def main(argv=None):
     parser = argparse.ArgumentParser(description="RailPulse Dortmund ETL")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth", "train-demo", "audit-model", "train-route-delay", "train-evidence"):
+    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth", "train-demo", "audit-model", "train-route-delay", "train-evidence", "history-rail"):
         command = sub.add_parser(name)
         command.add_argument("--month", default=DEFAULT_MONTH, help="YYYY-MM")
         command.add_argument("--data-root", type=Path, default=Path("data"))
@@ -19,6 +19,17 @@ def main(argv=None):
     route.add_argument("--mode", choices=("arrival", "departure", "both"), default="both")
     rebuilt = sub.choices["train-evidence"]
     rebuilt.add_argument("--mode", choices=("arrival", "departure", "both"), default="both")
+    history = sub.choices["history-rail"]
+    history.add_argument("--start", default="2024-07",
+                         help="First completed month YYYY-MM")
+    history.add_argument("--through", default=None,
+                         help="Last month to inspect, capped at last completed calendar month")
+    history.add_argument("--mode", choices=("arrival", "departure", "both"),
+                         default="both")
+    history.add_argument("--inventory-only", action="store_true",
+                         help="Check archive metadata/split, no large Parquet downloads")
+    history.add_argument("--refresh", action="store_true",
+                         help="Recreate private monthly feature caches")
     args = parser.parse_args(argv)
     month = checked_month(args.month)
     source = args.data_root / "raw" / source_filename(month)
@@ -32,6 +43,35 @@ def main(argv=None):
     if args.command in ("analyze", "run"):
         for path in build_reports(processed, Path("reports")):
             print(f"Report: {path}")
+    if args.command == "history-rail":
+        from .history_train import run_history
+        result = run_history(
+            start=checked_month(args.start),
+            through=checked_month(args.through) if args.through else None,
+            data_root=args.data_root,
+            mode=args.mode,
+            inventory_only=args.inventory_only,
+            refresh=args.refresh,
+        )
+        inv = result["inventory"]
+        print(f"Published source months: {inv['months_with_all_sources']}"
+              f" / {inv['months_catalogued']} expected complete calendar months.")
+        if inv["split"]:
+            split = inv["split"]
+            print(f"Metadata split: {len(split['train'])} train + "
+                  f"{len(split['validation'])} validation + "
+                  f"{len(split['test'])} recent test months.")
+        if not result["training_performed"]:
+            print("No training performed; inspect reports/history_month_inventory.csv")
+        for event, details in result.get("modes", {}).items():
+            if "error" in details:
+                print(f"{event}: {details['error']}")
+            else:
+                print(f"{event}: {details['selected_model']}, "
+                      f"retrospective MAE {details['test_mae_minutes']:.2f} minutes")
+                print(f"  Recent test months: {details['months_in_test']}")
+        print("Historical API updates are not independently verified real train delays.")
+        return
     if args.command == "train-evidence":
         from .evidence_model import run_training
         results = run_training(args.data_root, mode=args.mode)

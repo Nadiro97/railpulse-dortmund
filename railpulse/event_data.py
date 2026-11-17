@@ -17,6 +17,13 @@ from .pipeline import quoted, ingest_dortmund
 PLAN_PREFIX = "monthly_processed_data_plan"
 UNKNOWN = "(unknown)"
 MODES = ("arrival", "departure")
+# Includes regional, S-Bahn, long-distance and regional rail operator codes.
+# Unknown labels must be profiled, not silently classified as passenger rail.
+RAIL_TYPES = frozenset({
+    "S", "RE", "RB", "R", "IRE", "MEX", "RS", "ICE", "IC", "EC", "ECE",
+    "EN", "NJ", "RJ", "RJX", "TGV", "FLX", "ERB", "NX", "RRX", "REX",
+    "ECX", "HKX", "ABR", "SWE", "VIAS", "MRB", "ALX", "DLB", "HLB",
+})
 MINUTES_CAP = 120.0
 POST_EVENT_MINUTES = 15
 POST_EVENT_HOURS = 9
@@ -65,7 +72,7 @@ def get_month_sources(month: str, data_root: Path = Path("data")):
     return files
 
 
-def extract_labels(month: str, mode: str, files: dict):
+def extract_labels(month: str, mode: str, files: dict, *, rail_only: bool = False):
     """Return eligible labelled observations in memory plus aggregate coverage.
 
     Features: last PLAN snapshot >=60 minutes before the stop.
@@ -87,6 +94,9 @@ def extract_labels(month: str, mode: str, files: dict):
     planned = f"{mode}_planned_time"
     updated = f"{mode}_change_time"
     canceled = f"{mode}_is_canceled"
+    rail_condition = ("AND UPPER(TRIM(COALESCE(train_type, ''))) IN (" +
+                      ", ".join("'" + typ + "'" for typ in sorted(RAIL_TYPES)) +
+                      ")" if rail_only else "")
     con = duckdb.connect()
     try:
         con.execute("SET memory_limit='4GB'")
@@ -125,6 +135,7 @@ def extract_labels(month: str, mode: str, files: dict):
                   AND has_plan_record IS TRUE
                   AND is_additional_stop IS FALSE
                   AND is_replacement_train IS FALSE
+                  {rail_condition}
             ) WHERE rn = 1
         """)
 
@@ -243,6 +254,8 @@ def extract_labels(month: str, mode: str, files: dict):
             "outcome_source": "explicit parsed changes after scheduled Dortmund event",
             "is_independent_actual_time": False,
             "missing_updates_are_assumed_on_time": False,
+            "rail_only": bool(rail_only),
+            "rail_classification": sorted(RAIL_TYPES) if rail_only else None,
         })
 
         # Distinct stop labels, never numeric features based on post-event data.
