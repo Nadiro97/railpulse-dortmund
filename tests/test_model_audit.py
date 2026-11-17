@@ -46,7 +46,7 @@ def test_month_wide_audit_outputs_only_aggregates(tmp_path):
         "model_audit_calibration.csv",
     }
     text = (tmp_path / "model_audit_summary.json").read_text()
-    assert '"station_name"' not in text and '"planned_date"' not in text
+    assert '"planned_date"' not in text and "Dortmund Hbf" not in text
     assert "Dortmund Hbf" in (tmp_path / "model_audit_cohorts.csv").read_text()
 
 
