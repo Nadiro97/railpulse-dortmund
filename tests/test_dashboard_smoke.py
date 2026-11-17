@@ -12,7 +12,7 @@ def test_streamlit_dashboard_loads_without_real_data(monkeypatch, tmp_path):
     app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "dashboard" / "app.py"))
     app.run(timeout=20)
     assert not app.exception, [str(e.message) for e in app.exception]
-    assert any("Voraussichtliche Verspätung am Dortmunder Halt" in str(x.value) for x in app.subheader)
+    assert any("Verspätung am Dortmunder Halt — Forschungsmodell" in str(x.value) for x in app.subheader)
     assert len(app.info) >= 1, "Expected guidance for a checkout without trained artifacts"
 
 
