@@ -9,7 +9,7 @@ from .analytics import build_reports
 def main(argv=None):
     parser = argparse.ArgumentParser(description="RailPulse Dortmund ETL")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth", "train-demo", "audit-model", "train-route-delay"):
+    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth", "train-demo", "audit-model", "train-route-delay", "train-evidence"):
         command = sub.add_parser(name)
         command.add_argument("--month", default=DEFAULT_MONTH, help="YYYY-MM")
         command.add_argument("--data-root", type=Path, default=Path("data"))
@@ -17,6 +17,8 @@ def main(argv=None):
     cross.add_argument("--test-month", default="2026-10", help="Unseen next month YYYY-MM")
     route = sub.choices["train-route-delay"]
     route.add_argument("--mode", choices=("arrival", "departure", "both"), default="both")
+    rebuilt = sub.choices["train-evidence"]
+    rebuilt.add_argument("--mode", choices=("arrival", "departure", "both"), default="both")
     args = parser.parse_args(argv)
     month = checked_month(args.month)
     source = args.data_root / "raw" / source_filename(month)
@@ -30,6 +32,18 @@ def main(argv=None):
     if args.command in ("analyze", "run"):
         for path in build_reports(processed, Path("reports")):
             print(f"Report: {path}")
+    if args.command == "train-evidence":
+        from .evidence_model import run_training
+        results = run_training(args.data_root, mode=args.mode)
+        for event, details in results.items():
+            selection = details["selected"]
+            quality = details["validation"][selection]
+            print(f"{event} — selected {selection}, validation MAE: {quality['mae_minutes']:.2f} min; weighted MAE: {quality['weighted_mae_minutes']:.2f}")
+            print(f"  Validated for user-facing display: {details['eligible_for_user_facing_estimates']}")
+            print(f"  October is a previously inspected diagnostic, not a fresh independent test.")
+        print("Aggregate-only reports under reports/. Trusted local models under models/.")
+        print("IMPORTANT: historical API updates are NOT independently verified physical arrivals.")
+        return
     if args.command == "train-route-delay":
         from .route_delay import train_local_route_models
         outcome = train_local_route_models(args.data_root, mode=args.mode)

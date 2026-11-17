@@ -1,0 +1,55 @@
+name: Evidence-first Dortmund minutes validation (large archives)
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Event at Dortmund"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - both
+          - arrival
+          - departure
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evidence-minutes
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      HF_HUB_DISABLE_PROGRESS_BARS: '1'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install -e '.[dashboard,ml,dev]'
+      - name: Validate data extraction and modeling contracts
+        run: python -m pytest -q
+      - name: Train / evaluate historical timetable-update minutes
+        run: python -m railpulse train-evidence --mode ${{ inputs.mode }}
+      - name: Ensure models and row-level records are not in reports
+        shell: bash
+        run: |
+          test -d reports
+          if find reports -type f | grep -E '\.(parquet|duckdb|joblib|pkl|pickle|db)$'; then
+            echo "Private row-level data or model appears in reports/" >&2
+            exit 1
+          fi
+      - name: Upload aggregate-only evaluation reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: dortmund-evidence-minutes-aggregate
+          path: reports/evidence_minutes_*_evaluation.json
+          retention-days: 7
+          if-no-files-found: error

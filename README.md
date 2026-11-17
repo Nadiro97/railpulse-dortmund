@@ -1,30 +1,35 @@
 # RailPulse Dortmund 🚆
 
-**Data Engineering & Analytics of railway timetable updates and cancellations at Dortmund stations.**
+**Research project: evidence-first minutes estimates for Dortmund train timetable updates, with explicit uncertainty and missing-data checks.**
 
-Python · DuckDB · Parquet · SQL · Streamlit
+**Critical limitation:** Deutsche Bahn's historical changed timetable timestamps are not independently verified actual arrival/departure times. The upstream processed data fills some missing updated timestamps with planned values. **The application must not claim proven real-world punctuality**, and will decline to estimate when validation or coverage is weak.
 
-> **Project status:** September 2026 source data has been processed through GitHub Actions. Read the [first verified descriptive findings](docs/RESULTS_2026_09.md). Updated times may reflect planned-time fallbacks, so these are **not verified actual arrival delays**. Deutsche Bahn rail records only, not DSW21 buses or Stadtbahnen.
+## Rebuilt evidence-first pipeline (experimental)
 
-## Quick start
+The new implementation uses the raw **plan snapshots** and **explicit change snapshots** rather than treating the processed `delay_in_min` as physical arrival ground truth. It only uses scheduled features from planned snapshots at least **60 minutes before the Dortmund event**, then finds an explicit updated time in snapshots **15 minutes to 9 hours after the scheduled event**. Those late snapshots are still only a *proxy* for the outcome, not verified physical arrival evidence. Missing snapshots are **unknown, never silently punctual**.
 
-Requires Python 3.10+ and disk space for one monthly Germany-wide Parquet file.
+Feature engineering adds Dortmund stop, train type, line number, train number, first listed upstream station, final listed downstream station, route stop index, number of listed stops, weekday/weekend, rush hour, cyclic hour representation, route progress and missing-route flags. For a train going Dortmund → Düsseldorf, use **departure at Dortmund**; for a train coming from Aachen to Dortmund, use **arrival at Dortmund**. Neither distant city delay nor full journey origin is inferred from a partial route.
 
-```bash
-python -m venv .venv
-# Activate virtualenv: source .venv/bin/activate (Linux/macOS)
-# Windows: .venv\Scripts\Activate.ps1
-pip install -e '.[dashboard,dev]'
-python -m railpulse download --month 2026-09
-python -m railpulse extract --month 2026-09
-python -m railpulse analyze --month 2026-09
-streamlit run dashboard/app.py
-python -m pytest -q
+Train **July–August 2026**, choose among a no-delay dummy, median/mean, simple ridge, route ridge and route-aware gradient boosting using **September** validation only, and report **October as an already inspected diagnostic**. Our primary criterion is **weighted MAE in minutes** (5× weight for archived 15+ minute updates, 3× for 6–14 minute updates, 1× otherwise), alongside ordinary MAE, severe-delay misses, punctual-claim reliability, and fraction of cases within 5 minutes. The dashboard shows **Pünktlich**, **Voraussichtliche Verspätung: X Minuten**, or **Keine belastbare Schätzung**. It does not display a fake percentage in place of minute estimates. It refuses to show a claim unless validation improves on the dummy and quality/coverage thresholds are met.
+
+After updating your local checkout in PowerShell:
+
+```powershell
+cd C:\Users\znadi\railpulse-dortmund
+git pull
+.\.venv\Scripts\python.exe -m pip install -e ".[dashboard,ml,dev]"
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m railpulse train-evidence --mode both
+.\.venv\Scripts\python.exe -m streamlit run dashboard/app.py
 ```
 
-Or `python -m railpulse run --month 2026-09` to run ingestion and reports.
+**Data storage warning:** This experiment downloads four months of Germany-wide monthly archives, including original plan and change snapshots. Ensure sufficient storage before starting; downloads can be large. Learned joblib models stay in your local Git-ignored `models/` folder. **Never load joblib models from unknown sources**: it uses Python pickle internally. Aggregated validation reports are written under `reports/` and are never mistaken for real train arrival verification.
 
-The project **does not include train datasets**. Downloaded files are kept locally and ignored by Git. If a release is unavailable, choose an available `--month YYYY-MM`.
+See [full methodology and blockers](docs/EVIDENCE_FIRST_REBUILD.md) and the [manual aggregate-only GitHub workflow](.github/workflows/evidence-minutes.yml). **The new model's real-data evaluation has not been completed merely by passing unit tests.** Earlier archived-record experiments remain in this repo for historical reference, not as claims of real-life punctuality.
+
+---
+
+## Legacy work (reproducibility only)
 
 ## Explicit update validation (second milestone)
 

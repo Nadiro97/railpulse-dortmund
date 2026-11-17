@@ -8,6 +8,8 @@ OPTIONAL_TYPES = {
     "train_type": "VARCHAR",
     "train_number": "VARCHAR",
     "line_number": "VARCHAR",
+    "train_line_ride_id": "VARCHAR",
+    "train_line_station_num": "DOUBLE",
     "final_destination_station": "VARCHAR",
     "time": "TIMESTAMP",
     "delay_in_min": "DOUBLE",
