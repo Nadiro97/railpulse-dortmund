@@ -107,6 +107,14 @@ Training uses **only September 1–16, 2026** explicitly updated eligible histor
 
 The form works even if the analytic CSV reports have not been generated. It requires a locally trained model. See [the demo methodology](docs/PREDICTION_DEMO.md).
 
+## Whole-model reliability audit (all stations and train categories)
+
+Our existing demo is **not a validated real-world train-delay predictor**. The archival target is a **recorded timetable change of 6+ minutes**, not an independent measurement of physical arrival. Records without explicit arrival updates, cancellations, and replacements are omitted; differences between train types, routes, and months can distort a prediction. A model score of 10–20% cannot be interpreted as a guaranteed real-world on-time rate.
+
+Run `python -m railpulse audit-model` after installing `.[dashboard,ml,dev]`. The audit reuses September and October archived sources where available and writes only aggregate files: `reports/model_audit_summary.json`, `model_audit_cohorts.csv`, `model_audit_calibration.csv`, and `model_audit_coverage.csv`. These check all station/type groups with sufficient samples, calibration on archival labels, and missing-change coverage. Or use the [manual GitHub workflow](https://github.com/Nadiro97/railpulse-dortmund/actions/workflows/model-audit.yml). See [audit methodology](docs/WHOLE_MODEL_AUDIT.md).
+
+**Policy:** Do not promote or claim a real-world passenger-delay predictor until reliable independently verified arrival-time ground truth, a time-bounded prediction cutoff, comprehensive service coverage, and fresh untouched temporal evaluations are available. The dashboard now explicitly labels its score as exploratory archival-update analysis.
+
 ## Pipeline
 
 `Hugging Face monthly_processed_data/*.parquet` → select Dortmund station records with DuckDB → validate missing values, cancellations and plan coverage → calculate planned-vs-changed arrival time differences → CSV summaries → local Streamlit dashboard.

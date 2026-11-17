@@ -16,10 +16,10 @@ st.warning(
 
 
 # Local-only interactive model score. The form works without report CSV files.
-st.subheader("Try the experimental prediction demo")
+st.subheader("Explore the archival model (not a real-world delay predictor)")
 st.caption(
-    "Choose a scheduled rail stop. The result estimates risk of an archived "
-    "arrival-timetable update of 6+ minutes, NOT a live or verified train delay."
+    "The model estimates an archived timetable-update label in a selected sample, "
+    "NOT how likely your train will really be late. Its cross-month reliability is limited."
 )
 from railpulse.demo_model import MODEL_PATH, load_artifact, predict_probability
 if MODEL_PATH.is_file():
@@ -45,12 +45,13 @@ if MODEL_PATH.is_file():
                 demo, station, category, int(hour),
                 ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].index(day) + 1,
             )
-            st.metric("Model-estimated timetable-update risk", f"{chance:.1%}")
+            st.metric("Experimental score for archived 6+ min timetable update", f"{chance:.1%}")
             st.progress(chance)
             if chance >= demo["threshold"]:
-                st.warning("Model flag: estimated risk exceeds the reviewed 22.5% alert threshold.")
+                st.warning("Experimental archive-update flag (not a verified late-arrival warning).")
             else:
-                st.info("Model score below the reviewed 22.5% alert threshold.")
+                st.info("Below the archive-update flag threshold; this does NOT mean the train is likely on time.")
+            st.warning("Do not use this score to decide whether to catch a train. Real arrival delays are not verified by this dataset.")
             st.caption(
                 "This is an experimental retrospective-score demonstration. "
                 "The percentage is NOT a calibrated personal travel probability or a live train prediction. "
@@ -356,6 +357,58 @@ else:
     st.info(
         "Run `python -m railpulse ml-multimonth` or download the aggregate-only "
         "multi-month GitHub Actions artifact into `reports/`."
+    )
+
+
+st.divider()
+st.subheader("Whole-model reliability audit")
+st.caption(
+    "Research check across all train categories and Dortmund stations. "
+    "A model passing software tests is not evidence of correct real-world train-delay probabilities."
+)
+audit_summary_path = reports / "model_audit_summary.json"
+audit_cohorts_path = reports / "model_audit_cohorts.csv"
+audit_calibration_path = reports / "model_audit_calibration.csv"
+audit_coverage_path = reports / "model_audit_coverage.csv"
+if all(path.is_file() for path in (
+    audit_summary_path, audit_cohorts_path, audit_calibration_path, audit_coverage_path
+)):
+    import json
+    audit_report = json.loads(audit_summary_path.read_text(encoding="utf-8"))
+    st.error(
+        "The current model is NOT validated for passenger arrival delays. "
+        "The comparison below concerns recorded timetable updates in the archive only."
+    )
+    overview = []
+    for name, details in audit_report["periods"].items():
+        overview.append({
+            "Period": name,
+            "Archived records": details["sample_n"],
+            "Observed event share": details["observed_archived_event_fraction"],
+            "Average score": details["average_model_score"],
+            "Score–outcome gap": details["score_event_gap"],
+            "Brier score": details["brier"],
+            "ROC AUC": details["roc_auc"],
+            "False alerts per 1,000 records": details["false_alerts_per_1000"],
+        })
+    st.dataframe(pd.DataFrame(overview), hide_index=True, use_container_width=True)
+    with st.expander("Station and train-category audit"):
+        cohort_table = pd.read_csv(audit_cohorts_path)
+        period = st.selectbox("Audit period", ["october_holdout", "september_holdout"])
+        st.dataframe(cohort_table[cohort_table["period"] == period],
+                     hide_index=True, use_container_width=True)
+    with st.expander("Calibration and missing-update coverage"):
+        st.caption(
+            "A model score of 20% is only meaningful if comparable archived cases "
+            "show that label about 20% of the time. This does not verify actual arrivals."
+        )
+        st.dataframe(pd.read_csv(audit_calibration_path), hide_index=True, use_container_width=True)
+        st.dataframe(pd.read_csv(audit_coverage_path), hide_index=True, use_container_width=True)
+else:
+    st.info(
+        "Whole-model audit not generated locally. To check station, train-category, "
+        "score calibration and missing update coverage, run "
+        "python -m railpulse audit-model (or use its manual GitHub workflow)."
     )
 
 st.divider()

@@ -9,7 +9,7 @@ from .analytics import build_reports
 def main(argv=None):
     parser = argparse.ArgumentParser(description="RailPulse Dortmund ETL")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth", "train-demo"):
+    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth", "train-demo", "audit-model"):
         command = sub.add_parser(name)
         command.add_argument("--month", default=DEFAULT_MONTH, help="YYYY-MM")
         command.add_argument("--data-root", type=Path, default=Path("data"))
@@ -28,6 +28,14 @@ def main(argv=None):
     if args.command in ("analyze", "run"):
         for path in build_reports(processed, Path("reports")):
             print(f"Report: {path}")
+    if args.command == "audit-model":
+        from .model_audit import run_model_audit
+        report = run_model_audit(args.data_root)
+        for period, values in report["periods"].items():
+            print(f"{period}: n={values['sample_n']:,} archived-label Brier={values['brier']:.4f}, ROC AUC={values['roc_auc']}")
+        print("Aggregate-only model audit: reports/model_audit_*.csv / reports/model_audit_summary.json")
+        print("Caution: not verified real-world arrivals.")
+        return
     if args.command == "train-demo":
         from .demo_model import train_local_model, MODEL_PATH
         artifact = train_local_model(args.data_root, MODEL_PATH)
