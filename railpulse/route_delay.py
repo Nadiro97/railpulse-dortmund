@@ -269,7 +269,10 @@ def fit_route_minutes(frame, mode="arrival", reports_dir=Path("reports"),
     classifier.fit(train[CAT_ROUTE + NUMERIC], (ytrain >= 6).astype(int))
     prob = classifier.predict_proba(test[CAT_ROUTE + NUMERIC])[:, 1]
     prob_metrics = {
-        "roc_auc_archived_6plus": round(float(roc_auc_score(ytest >= 6, prob)), 5),
+        "roc_auc_archived_6plus": (
+            round(float(roc_auc_score(ytest >= 6, prob)), 5)
+            if len(set(ytest >= 6)) > 1 else None
+        ),
         "brier_archived_6plus": round(float(brier_score_loss(ytest >= 6, prob)), 5),
         "sample_n": int(len(test)),
     }
