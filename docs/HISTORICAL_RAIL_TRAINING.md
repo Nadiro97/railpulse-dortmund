@@ -57,3 +57,9 @@ The existing Streamlit dashboard can display the source inventory and the monthl
 - Calibrate and evaluate new prediction vintages on genuinely untouched future dates.
 
 **Provenance:** Deutsche Bahn timetable data, CC BY 4.0; historical archive: [Piet Brömmel / Deutsche Bahn Data](https://huggingface.co/datasets/piebro/deutsche-bahn-data). This independent project is not affiliated with DB.
+
+## Interface wiring and diagnosis
+
+The former experimental on-page form used the **older** `evidence_minutes_<event>.joblib` model, even if the multi-year historical model had been trained. The new UI explicitly loads `models/history_rail_<event>_research.joblib` and, for compatibility with pre-existing local models, builds a supported service catalogue **only from the older training-month cached rail stops**. It does not read test or validation months for these dropdowns. There is no global `deployment_allowed` gate in the historical research artifact: exploratory numerical minutes are reported **as archival timetable-change estimates only**, with visible model/test errors. The user is not told physical punctuality has been verified. If a file, catalogue, or report is missing, the UI indicates which component is missing rather than repeatedly showing the older vague warning.
+
+Diagnose with `python -m railpulse model-status` after `git pull`. If it reports no newer trained model, the multi-year `history-rail --mode both` run must successfully complete on the local machine first. If quality reports list insufficient monthly coverage, inspect their excluded-month reasons; do not relabel missing updates as punctual or loosen gates without evidence.

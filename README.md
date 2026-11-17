@@ -4,6 +4,14 @@
 
 **Critical limitation:** Deutsche Bahn's historical changed timetable timestamps are not independently verified actual arrival/departure times. The upstream processed data fills some missing updated timestamps with planned values. **The application must not claim proven real-world punctuality**, and will decline to estimate when validation or coverage is weak.
 
+## Multi-year research estimate versus old quality gate (fixed)
+
+If you previously saw **"Keine belastbare Schätzung" for every route**, the former top-of-page form was loading `models/evidence_minutes_<arrival|departure>.joblib` from the *old four-month experiment* instead of the new model. Run `python -m railpulse model-status` to check separately for newer `models/history_rail_<arrival|departure>_research.joblib` files, completed evaluation reports and failed month-quality reports. The dashboard now uses the multi-year research model **if it exists**, and otherwise explains why the new model is missing. It never silently falls back to the older predictor.
+
+With a successfully trained multi-year local model, the dashboard displays a **numeric experimental archived timetable-update estimate in minutes**, with its model name, historical support, validation/test MAE and warnings. The result is **not verified physical delay**. In particular, a zero-minute estimate must never be presented as a confirmed "Pünktlich" train. We do not bypass poor model accuracy by changing a global quality flag; the numerical research estimate is accompanied by explicit accuracy diagnostics and limitations.
+
+If your training completed with too few usable months, inspect `reports/history_rail_arrival_quality.json` and `reports/history_rail_departure_quality.json`. You can also run a data-only inventory with `python -m railpulse history-rail --inventory-only`; that command **does not train**. Existing local training-month caches can regenerate route selection menus without needing to rerun the entire multi-year training.
+
 ## Multi-year Dortmund rail inventory and retrospective 80/20 evaluation
 
 The **new rail-only historical workflow** audits every complete published month from **July 2024 through the last completed calendar month**. It restricts records to reviewed railway-service codes (S, RB, RE, ICE, IC, EC and other rail codes), excluding buses, and evaluates Dortmund **arrivals and departures separately**.

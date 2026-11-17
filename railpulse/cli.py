@@ -9,7 +9,7 @@ from .analytics import build_reports
 def main(argv=None):
     parser = argparse.ArgumentParser(description="RailPulse Dortmund ETL")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth", "train-demo", "audit-model", "train-route-delay", "train-evidence", "history-rail"):
+    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth", "train-demo", "audit-model", "train-route-delay", "train-evidence", "history-rail", "model-status"):
         command = sub.add_parser(name)
         command.add_argument("--month", default=DEFAULT_MONTH, help="YYYY-MM")
         command.add_argument("--data-root", type=Path, default=Path("data"))
@@ -43,6 +43,13 @@ def main(argv=None):
     if args.command in ("analyze", "run"):
         for path in build_reports(processed, Path("reports")):
             print(f"Report: {path}")
+    if args.command == "model-status":
+        import json
+        from .history_inference import local_diagnostics
+        for event in ("arrival", "departure"):
+            print(json.dumps(local_diagnostics(event), indent=2, ensure_ascii=False))
+        print("Neither the original nor the multi-year model is independently validated against real train arrivals.")
+        return
     if args.command == "history-rail":
         from .history_train import run_history
         result = run_history(

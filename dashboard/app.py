@@ -20,94 +20,190 @@ st.error(
     "physical train arrivals. No reliable real-world Verspätung prediction is "
     "established yet. Never rely on this demo to catch a train."
 )
-st.subheader("Voraussichtliche Verspätung am Dortmunder Halt")
+st.subheader("Verspätung am Dortmunder Halt — Forschungsmodell")
 st.caption(
-    "First choose whether to measure arrival AT Dortmund or departure FROM Dortmund. "
-    "A final destination is NOT proof that the service stops at every intermediate city. "
-    "Bus-labelled entries are DB timetable records, not a full city-bus feed."
+    "Das neue Mehrmonatsmodell ist separat vom alten Juli–Oktober-Modell. "
+    "Diese Schätzung ist eine historische DB-Zeitplanänderung in Minuten, "
+    "keine unabhängig bestätigte tatsächliche Zugverspätung."
 )
+from railpulse.history_inference import (
+    history_model_path, load_history_model, estimate_archived_minutes, local_diagnostics,
+)
+
 event = st.radio(
-    "Dortmund event", ("Abfahrt aus Dortmund", "Ankunft in Dortmund"),
-    horizontal=True,
+    "Am Dortmunder Halt", ("Abfahrt aus Dortmund", "Ankunft in Dortmund"),
+    horizontal=True, key="history_event",
 )
 mode = "departure" if event.startswith("Abfahrt") else "arrival"
-if model_path(mode).is_file():
+status = local_diagnostics(mode)
+
+if status["has_multi_year_model"]:
     try:
-        local = load_local_model(mode)
-    except (KeyError, ValueError, OSError, TypeError) as exc:
-        st.error(f"Invalid local model: {exc}")
+        local = load_history_model(mode)
+    except (OSError, ValueError, KeyError, TypeError, ImportError) as exc:
+        st.error(
+            "Das Mehrmonatsmodell kann nicht geladen werden: "
+            f"{exc}. Prüfe die lokalen Trainingsdateien bzw. den Bericht."
+        )
         local = None
-    if local:
+    if local is not None:
         services = local["service_rows"]
-        station = st.selectbox("Dortmunder Bahnhof", sorted({x["station_name"] for x in services}))
-        choices = [x for x in services if x["station_name"] == station]
-        category = st.selectbox("Zug-/Linienart", sorted({x["train_type"] for x in choices}))
-        choices = [x for x in choices if x["train_type"] == category]
-        line = st.selectbox("Linie (falls bekannt)", sorted({x["line_number"] for x in choices}))
-        choices = [x for x in choices if x["line_number"] == line]
-        origin = st.selectbox(
-            "Erster aufgeführter vorheriger Halt (nicht garantiert Zugstart)",
-            sorted({x["route_origin"] for x in choices}),
-        )
-        choices = [x for x in choices if x["route_origin"] == origin]
-        dest = st.selectbox(
-            "Letzter aufgeführter Zielhalt (nicht garantiert Fahrgastziel)",
-            sorted({x["route_destination"] for x in choices}),
-        )
-        choice = next(x for x in choices if x["route_destination"] == dest)
-        left, right = st.columns(2)
-        with left:
-            hour = st.selectbox("Planmäßige Stunde in Dortmund", list(range(24)), index=8)
-        with right:
-            weekday = st.selectbox(
-                "Wochentag", ["Montag", "Dienstag", "Mittwoch", "Donnerstag",
-                               "Freitag", "Samstag", "Sonntag"]
+        if not services:
+            st.warning(
+                "Kein Zug/Linien-Verlauf hat mindestens 20 passende "
+                "Trainingsbeobachtungen. Keine Schätzung möglich."
             )
-        st.caption(
-            f"Historische Beispiele für diese Haltestelle/Linie/Richtung: {choice['support']}. "
-            "Das ist keine Verifikation der tatsächlichen Ankunft."
-        )
-        if st.button("Verspätung schätzen", type="primary"):
-            output = estimate_minutes(
-                local, choice, int(hour),
-                ["Montag", "Dienstag", "Mittwoch", "Donnerstag",
-                 "Freitag", "Samstag", "Sonntag"].index(weekday) + 1,
+        else:
+            station = st.selectbox(
+                "Dortmunder Bahnhof",
+                sorted({r["station_name"] for r in services}),
+                key="history_station",
             )
-            if output["minutes"] is None:
-                st.warning(
-                    "Keine belastbare Schätzung: Datenqualität oder Testgüte reicht "
-                    "für eine seriöse Minutenangabe nicht aus."
+            candidates = [r for r in services if r["station_name"] == station]
+            category = st.selectbox(
+                "Zugart", sorted({r["train_type"] for r in candidates}),
+                key="history_train_type",
+            )
+            candidates = [r for r in candidates if r["train_type"] == category]
+            line = st.selectbox(
+                "Linie", sorted({r["line_number"] for r in candidates}),
+                key="history_line",
+            )
+            candidates = [r for r in candidates if r["line_number"] == line]
+            train_number = st.selectbox(
+                "Zugnummer (aus echten Trainingsverbindungen)",
+                sorted({r["train_number"] for r in candidates}),
+                key="history_train_number",
+            )
+            candidates = [r for r in candidates if r["train_number"] == train_number]
+            origin = st.selectbox(
+                "Erster aufgeführter vorheriger Halt (nicht zwingend Start)",
+                sorted({r["route_origin"] for r in candidates}),
+                key="history_origin",
+            )
+            candidates = [r for r in candidates if r["route_origin"] == origin]
+            destination = st.selectbox(
+                "Letzter aufgeführter Zielhalt (nicht zwingend Fahrgastziel)",
+                sorted({r["route_destination"] for r in candidates}),
+                key="history_destination",
+            )
+            chosen = next(r for r in candidates
+                          if r["route_destination"] == destination)
+            left, right = st.columns(2)
+            with left:
+                hour = st.selectbox(
+                    "Planmäßige Stunde in Dortmund", list(range(24)),
+                    index=8, key="history_hour",
                 )
-            elif output["minutes"] == 0:
-                st.success("Pünktlich")
-            else:
-                st.warning(output["status"])
+            with right:
+                weekday = st.selectbox(
+                    "Wochentag", [
+                        "Montag", "Dienstag", "Mittwoch", "Donnerstag",
+                        "Freitag", "Samstag", "Sonntag",
+                    ], key="history_weekday",
+                )
             st.caption(
-                "Das Ergebnis beschreibt ausschließlich historische Zeitplanänderungen "
-                "an diesem Dortmunder Halt. Keine Echtzeitdaten oder verifizierten "
-                "tatsächlichen Ankunfts-/Abfahrtszeiten."
+                f"Trainingsbeispiele für diese konkrete Linie/Richtung/Zugnummer: "
+                f"{chosen['support']}. Alle Eingaben stammen aus früheren Fahrplandaten."
             )
-        if report_path(mode).is_file():
-            import json
-            report = json.loads(report_path(mode).read_text(encoding="utf-8"))
-            st.subheader("Wie gut ist dieses Modell wirklich?")
-            s = report["validation"].get(report["selected"], {})
-            a,b,c = st.columns(3)
-            a.metric("Validierung: Fehler in Minuten (MAE)", f"{s.get('mae_minutes', float('nan')):.1f}")
-            b.metric("Gewichteter Fehler (MAE)", f"{s.get('weighted_mae_minutes', float('nan')):.1f}")
-            c.metric("Training auf historischen Stops", f"{report['training_count']:,}")
-            if not report["eligible_for_user_facing_estimates"]:
-                st.warning("Model quality gates failed: we refuse to show invented certainty.")
-            st.caption(
-                "Train: July–August 2026 · Selection: September 2026 · October diagnostics "
-                "were already inspected. See the methodology before interpreting these scores."
-            )
+            if st.button("Archivierte Minuten schätzen", type="primary",
+                         key="history_estimate"):
+                estimate = estimate_archived_minutes(
+                    local, chosen, int(hour),
+                    ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag",
+                     "Samstag", "Sonntag"].index(weekday) + 1,
+                )
+                if estimate["minutes"] is None:
+                    st.warning(estimate["reason"])
+                else:
+                    st.metric(
+                        "Experimentell geschätzte Zeitplanabweichung in Dortmund",
+                        f"{estimate['minutes']:.1f} Minuten",
+                    )
+                    if estimate["is_baseline"]:
+                        st.warning(
+                            "Auf der Validierung gewann nur ein einfaches "
+                            "Vergleichsmodell. Diese Zahl ist keine belastbare "
+                            "individuelle Verspätungsprognose."
+                        )
+                    elif estimate["minutes"] <= 1.5:
+                        st.info(
+                            "Der archivbasierte Modellwert liegt nahe null. "
+                            "Das beweist nicht 'Pünktlich' im tatsächlichen Betrieb."
+                        )
+                    st.warning(
+                        "WICHTIG: Nur ein experimenteller Zahlenwert für alte "
+                        "API-Fahrplanänderungen. Keine Live-Daten und keine "
+                        "bestätigte tatsächliche Ankunfts-/Abfahrtsverspätung."
+                    )
+        st.caption(
+            "Trainiert auf historischen Monaten: "
+            + ", ".join(local["train_months"])
+            + " | Validierungsmonate: "
+            + ", ".join(local["validation_months"])
+            + " | Modell: "
+            + str(local["model_name"])
+        )
+elif status["has_old_2026_model"]:
+    st.warning(
+        "Gefunden: nur das alte Juli–Oktober-Modell. Dessen globaler "
+        "Qualitätsfilter blockierte alle Linien. Das neue Mehrmonatsmodell "
+        "wurde hier nicht erfolgreich erzeugt oder ist noch nicht vorhanden."
+    )
+    st.code(
+        r'.\.venv\Scripts\python.exe -m railpulse history-rail --mode both',
+        language="powershell",
+    )
 else:
     st.info(
-        "No rebuilt local model yet. In the project directory run "
-        r'.\.venv\Scripts\python.exe -m railpulse train-evidence --mode both '
-        "after git pull. This downloads large public monthly archives locally."
+        "Noch kein abgeschlossenes Mehrmonats-Forschungsmodell vorhanden. "
+        "Eine Quelleninventur allein erzeugt keine Modellschätzung."
     )
+    st.code(
+        r'.\.venv\Scripts\python.exe -m railpulse history-rail --mode both',
+        language="powershell",
+    )
+
+if status.get("training_blocker"):
+    st.error("Grund für fehlendes Training: " + status["training_blocker"])
+    if status.get("excluded_months"):
+        with st.expander("Warum wurden Monate ausgeschlossen?"):
+            st.dataframe(pd.DataFrame([
+                {"Monat": month, "Grund": reason}
+                for month, reason in status["excluded_months"].items()
+            ]), hide_index=True, use_container_width=True)
+
+if status["has_multi_year_evaluation"]:
+    import json
+    multi_report = json.loads(
+        Path(f"reports/history_rail_{mode}_evaluation.json")
+        .read_text(encoding="utf-8")
+    )
+    with st.expander("Wie genau war die Mehrmonats-Schätzung?"):
+        val = multi_report["validation_models"][multi_report["selected_model"]]
+        test = multi_report["test_overall"]
+        left, right = st.columns(2)
+        left.metric("Validierung — MAE", f"{val['mae_minutes']:.2f} min")
+        right.metric("Rückblickender Test — MAE", f"{test['mae_minutes']:.2f} min")
+        st.caption(
+            f"Validierung — gewichteter MAE: {val['weighted_mae_minutes']:.2f} min. "
+            f"Rückblickender Test — gewichteter MAE: "
+            f"{test['weighted_mae_minutes']:.2f} min. "
+            "Auf den historischen API-Zeitplanupdates, NICHT auf verifizierten "
+            "echten Ankünften. Die Testmonate wurden bereits erforscht."
+        )
+        st.caption(
+            "Der ausgewählte Algorithmus überschreitet die "
+            "3%-Verbesserungshürde gegen das Null-Minuten-Basismodell: "
+            + ("Ja" if multi_report.get("selected_beats_zero_baseline_by_at_least_3pct")
+               else "Nein")
+        )
+else:
+    st.caption(
+        "Kein lokaler Mehrmonats-Evaluationsbericht vorhanden. "
+        "Prüfe reports/history_rail_<arrival|departure>_quality.json."
+    )
+
 st.divider()
 st.subheader("Mehrjährige Datenprüfung · Schienenverkehr")
 st.caption(
