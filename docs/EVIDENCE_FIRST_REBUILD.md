@@ -41,7 +41,8 @@ Candidates: trivial all-zero, training mean and median, simpler station/category
 **Hard quality gates** before *any* user-facing result:
 - Algorithm must beat the always-zero weighted-MAE baseline by at least 3% on September.
 - On September, no more than half of the 15+ minute archival update events may be called punctual and at least 80% of punctual claims must correspond to under 3-minute archived updates.
-- At least 50% of eligible stops in each training and validation month must have a usable post-event proxy label and early planned snapshot.
+- At least 50% of eligible stops in every evaluated month (training, validation and already-inspected October diagnostics) must have a usable post-event proxy label and early planned snapshot.
+- The inspected October model weighted MAE must also beat the trivial zero-prediction baseline, and its 15+ minute missed-as-punctual rate must be at most 60%. **This is a conservative veto, not a way to choose a model on October.**
 - At least 20 earlier records must match the chosen station, category, line, upstream route indicator, and destination. Otherwise: **Keine belastbare Schätzung**.
 - These are **provisional research safeguards**, not evidence of physical arrival reliability. Passing them does not establish real-world accuracy.
 

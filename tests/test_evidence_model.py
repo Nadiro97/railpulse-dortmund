@@ -8,7 +8,7 @@ import pytest
 
 from railpulse.event_data import extract_labels, PLAN_LEAD_MINUTES
 from railpulse.evidence_model import (
-    FEATURES, UNKNOWN, build_features, metrics, train_mode, estimate_minutes,
+    FEATURES, UNKNOWN, build_features, metrics, cohort_errors, train_mode, estimate_minutes,
     load_local_model, MIN_SERVICE_SUPPORT,
 )
 
@@ -80,6 +80,9 @@ def test_train_only_earlier_months_then_select_without_october(tmp_path):
     assert report["validation_count"] == 30 * 16
     assert "always_punctual" in report["validation"]
     assert "route_boost" in report["validation"]
+    assert "validation_cohort_errors" in report
+    assert "october_cohort_errors" in report
+    assert all(x["n"] >= 100 for x in report["validation_cohort_errors"])
     assert "simple_ridge" in report["validation"]
     assert report["supported_service_combinations"] >= 4
     artifact = load_local_model("arrival", tmp_path / "models")
@@ -185,3 +188,13 @@ def test_snapshot_label_requires_event_time_after_planned_and_early_plan(tmp_pat
     )
     assert out.iloc[0]["train_number"] == "999"
     assert out.iloc[0]["line_number"] == "S1"
+
+
+def test_group_diagnostics_do_not_emit_individual_train_rows():
+    data = build_features(fake_month(2026, 9, 30))
+    records = cohort_errors(data, np.zeros(len(data)))
+    assert any(x["group"] == "train_type" for x in records)
+    assert any(x["group"] == "line_number" for x in records)
+    assert all(x["n"] >= 100 for x in records)
+    assert all("train_number" not in x for x in records)
+    assert all("planned_date" not in x for x in records)

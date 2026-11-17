@@ -187,6 +187,33 @@ def _as_date(frame):
     )
 
 
+def cohort_errors(frame, prediction, minimum=100):
+    """Aggregate performance by all sufficiently represented services, no rows."""
+    import numpy as np
+
+    values = np.asarray(prediction, dtype=float)
+    if len(values) != len(frame):
+        raise ValueError("Cohort predictions must match the frame length.")
+    summaries = []
+    for column in ("station_name", "train_type", "line_number"):
+        for name, positions in frame.groupby(column, dropna=False).indices.items():
+            if len(positions) < minimum:
+                continue
+            actual = frame.iloc[positions]["observed_update_minutes"].to_numpy()
+            result = metrics(actual, values[positions])
+            summaries.append({
+                "group": column, "value": str(name),
+                "n": result["n"],
+                "mae_minutes": result["mae_minutes"],
+                "weighted_mae_minutes": result["weighted_mae_minutes"],
+                "severe_missed_as_punctual_fraction":
+                    result["severe_missed_as_punctual_fraction"],
+            })
+    return sorted(summaries, key=lambda x: (
+        -x["weighted_mae_minutes"], -x["n"], x["group"], x["value"],
+    ))
+
+
 def _service_key(row):
     return tuple(str(row[col]) for col in (
         "station_name", "train_type", "line_number", "route_origin",
@@ -246,6 +273,8 @@ def train_mode(frames, coverage, mode, model_dir=MODEL_ROOT,
     diagnostics = {name: metrics(inspected["observed_update_minutes"],
                                 _pred(model, inspected))
                    for name, model in candidates.items()}
+    validation_cohorts = cohort_errors(validation, _pred(candidates[selected], validation))
+    october_cohorts = cohort_errors(inspected, _pred(candidates[selected], inspected))
     # Fitted models and support dictionary remain strictly local.
     key_columns = [
         "station_name", "train_type", "line_number",
@@ -283,7 +312,11 @@ def train_mode(frames, coverage, mode, model_dir=MODEL_ROOT,
         and validation_scores[selected]["punctual_claim_precision"] is not None
         and validation_scores[selected]["punctual_claim_precision"] >= 0.80
         and all(coverage.get(m, {}).get("label_coverage_fraction", 0) >= 0.50
-                for m in (*TRAIN_MONTHS, VALIDATION_MONTH))
+                for m in (*TRAIN_MONTHS, VALIDATION_MONTH, INSPECTED_MONTH))
+        and diagnostics[selected]["weighted_mae_minutes"] <
+            diagnostics["always_punctual"]["weighted_mae_minutes"]
+        and (diagnostics[selected]["severe_missed_as_punctual_fraction"] is not None)
+        and diagnostics[selected]["severe_missed_as_punctual_fraction"] <= 0.60
     )
     artifact = {
         "schema": SCHEMA,
@@ -320,6 +353,8 @@ def train_mode(frames, coverage, mode, model_dir=MODEL_ROOT,
                                else "No reliable estimated punctual/delay display; failed archive-proxy quality gates"),
         "validation": validation_scores,
         "already_inspected_october": diagnostics,
+        "validation_cohort_errors": validation_cohorts,
+        "october_cohort_errors": october_cohorts,
         "month_quality": coverage,
         "training_count": int(len(train)),
         "validation_count": int(len(validation)),
@@ -329,7 +364,8 @@ def train_mode(frames, coverage, mode, model_dir=MODEL_ROOT,
         "caveats": [
             "Latest change snapshot after scheduled time can still be a forecast, not a verified physical arrival/departure.",
             "No explicit post-event change => UNKNOWN, not punctual.",
-            "Show no estimate if pre/post snapshot label coverage falls below 50% in training or validation.",
+            "Show no estimate if pre/post snapshot label coverage falls below 50% in training, validation, or inspected diagnostics.",
+            "October is used only as a conservative block on unsafe generalization, NOT to choose the algorithm or tune its threshold.",
             "Route origin is first station listed in the planned arrival path; may not represent true journey origin.",
             "All inputs known at least 60 min before planned Dortmund event.",
             "October was previously inspected and is NOT an untouched future holdout.",
