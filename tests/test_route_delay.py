@@ -82,6 +82,9 @@ def test_test_labels_cannot_affect_fitted_model(tmp_path):
     assert original["minutes_model"] == future_changed["minutes_model"]
     assert original["probability_model"] == future_changed["probability_model"]
     assert original["validation_route_mae"] == future_changed["validation_route_mae"]
+    assert future_changed["selected_for_minutes"] == original["selected_for_minutes"]
+    report = json.loads((tmp_path / "b" / "route_minutes_arrival_metrics.json").read_text())
+    assert report["heldout_route_probability"]["roc_auc_archived_6plus"] is None
 
 
 def test_unknown_route_and_bad_inputs_rejected(tmp_path):
