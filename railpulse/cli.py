@@ -9,12 +9,14 @@ from .analytics import build_reports
 def main(argv=None):
     parser = argparse.ArgumentParser(description="RailPulse Dortmund ETL")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth", "train-demo", "audit-model"):
+    for name in ("download", "extract", "analyze", "run", "validate-updates", "ml-baseline", "ml-improve", "ml-cross-month", "ml-multimonth", "train-demo", "audit-model", "train-route-delay"):
         command = sub.add_parser(name)
         command.add_argument("--month", default=DEFAULT_MONTH, help="YYYY-MM")
         command.add_argument("--data-root", type=Path, default=Path("data"))
     cross = sub.choices["ml-cross-month"]
     cross.add_argument("--test-month", default="2026-10", help="Unseen next month YYYY-MM")
+    route = sub.choices["train-route-delay"]
+    route.add_argument("--mode", choices=("arrival", "departure", "both"), default="both")
     args = parser.parse_args(argv)
     month = checked_month(args.month)
     source = args.data_root / "raw" / source_filename(month)
@@ -28,6 +30,17 @@ def main(argv=None):
     if args.command in ("analyze", "run"):
         for path in build_reports(processed, Path("reports")):
             print(f"Report: {path}")
+    if args.command == "train-route-delay":
+        from .route_delay import train_local_route_models
+        outcome = train_local_route_models(args.data_root, mode=args.mode)
+        for event, metrics in outcome.items():
+            print(f"{event} at Dortmund: trained {metrics['train_n']:,} archival records")
+            print(f"  Route-aware validation MAE: {metrics['validation']['station_line_destination']['mae_minutes']:.2f} minutes")
+            print(f"  Simple model validation MAE: {metrics['validation']['station_type_hour']['mae_minutes']:.2f} minutes")
+            print(f"  Selected on validation: {metrics['selected_on_validation_mae']}")
+        print("Local JSON models saved under ignored models/. Aggregate-only metrics under reports/.")
+        print("CAUTION: Updated timetable times are not verified physical arrivals/departures.")
+        return
     if args.command == "audit-model":
         from .model_audit import run_model_audit
         report = run_model_audit(args.data_root)

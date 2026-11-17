@@ -115,6 +115,26 @@ Run `python -m railpulse audit-model` after installing `.[dashboard,ml,dev]`. Th
 
 **Policy:** Do not promote or claim a real-world passenger-delay predictor until reliable independently verified arrival-time ground truth, a time-bounded prediction cutoff, comprehensive service coverage, and fresh untouched temporal evaluations are available. The dashboard now explicitly labels its score as exploratory archival-update analysis.
 
+## Route-aware minutes model — Dortmund arrival OR departure
+
+**Experimental new model:** We now estimate **nonnegative archived timetable-update minutes at Dortmund**, not just a 6+ minute yes/no category. Two separate models use **arrival at Dortmund** and **departure from Dortmund**, respectively. Inputs are **Dortmund stop, train category, line number, train's final destination, scheduled hour, and weekday**. Line and destination are included only when published; no route origin, intermediate stop, or passenger destination is fabricated. Long-distance trains often have no line number. Bus-labelled records are railway-timetable services, **not comprehensive city-bus coverage**.
+
+The dashboard only offers service/direction combinations that appeared repeatedly in training. It compares the route-aware minutes model against simpler station/type and constant-mean models using **September 17–20 validation**, then reports **September 21–30 holdout metrics**. There is also an uncalibrated experimental 6+ minute archival-update score. A route-aware model must beat the simpler baseline on validation before we call it an improvement.
+
+On Windows PowerShell, after pulling updates:
+
+```powershell
+git pull
+.\.venv\Scripts\python.exe -m pip install -e ".[dashboard,ml,dev]"
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m railpulse train-route-delay
+.\.venv\Scripts\python.exe -m streamlit run dashboard/app.py
+```
+
+Only September 2026 data are needed for this local experiment. Downloaded files, per-stop observations and learned models remain local and Git-ignored. The [model methodology](docs/ROUTE_AWARE_MINUTES.md) and [manual training/evaluation workflow](https://github.com/Nadiro97/railpulse-dortmund/actions/workflows/route-minutes.yml) explain the controls.
+
+**Not verified physical delay:** The targets are the *latest explicitly recorded API timetable updates*, measured against the planned Dortmund time. Predictions are **not** physical arrival/departure times, not live forecasts, and not reliable for making real travel decisions. A train's final destination does not prove a particular intermediate stop is on its route.
+
 ## Pipeline
 
 `Hugging Face monthly_processed_data/*.parquet` → select Dortmund station records with DuckDB → validate missing values, cancellations and plan coverage → calculate planned-vs-changed arrival time differences → CSV summaries → local Streamlit dashboard.

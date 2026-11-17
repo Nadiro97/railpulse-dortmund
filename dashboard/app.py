@@ -15,6 +15,111 @@ st.warning(
 )
 
 
+# Route/direction-aware experimental estimates; origin and intermediate stops are not inferred.
+st.subheader("Route-aware delay minutes at Dortmund (experimental)")
+st.caption(
+    "Choose an observed line and its train's final destination. Select arrival or departure "
+    "AT DORTMUND, not delay at the distant destination. Data are archival timetable updates, "
+    "NOT verified physical train arrival/departure times."
+)
+from railpulse.route_delay import (
+    CAT_ROUTE, MISSING, local_model_path, load_route_model, estimate_at_dortmund
+)
+event_label = st.radio(
+    "Where should Dortmund time be measured?",
+    ("Departure from Dortmund", "Arrival at Dortmund"),
+    horizontal=True,
+)
+event_mode = "departure" if event_label.startswith("Departure") else "arrival"
+if local_model_path(event_mode).is_file():
+    try:
+        route_artifact = load_route_model(event_mode)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        st.error(f"Route model cannot be loaded: {exc}. Retrain with python -m railpulse train-route-delay.")
+    else:
+        route_list = route_artifact["routes"]
+        st.caption("Only routes with repeated examples in our September training data appear below.")
+        route_stations = sorted({r["station_name"] for r in route_list})
+        route_station = st.selectbox("Dortmund stop", route_stations, key="r_station")
+        candidates = [r for r in route_list if r["station_name"] == route_station]
+        route_types = sorted({r["train_type"] for r in candidates})
+        route_type = st.selectbox("Train / replacement-service category", route_types, key="r_type")
+        candidates = [r for r in candidates if r["train_type"] == route_type]
+        route_lines = sorted({r["line_number"] for r in candidates})
+        route_line = st.selectbox(
+            "Line number (may be unavailable for long-distance trains)",
+            route_lines, key="r_line"
+        )
+        candidates = [r for r in candidates if r["line_number"] == route_line]
+        route_destinations = sorted({r["final_destination_station"] for r in candidates})
+        route_destination = st.selectbox(
+            "Train's final destination (not necessarily your stop)",
+            route_destinations, key="r_destination"
+        )
+        chosen_route = next(r for r in candidates
+                            if r["final_destination_station"] == route_destination)
+        r1, r2 = st.columns(2)
+        with r1:
+            route_hour = st.selectbox(
+                "Scheduled hour at Dortmund (Europe/Berlin)", list(range(24)),
+                index=8, key="r_hour"
+            )
+        with r2:
+            route_day = st.selectbox(
+                "Weekday at Dortmund",
+                ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                key="r_weekday"
+            )
+        st.caption(
+            f"Historical support for this exact station/type/line/destination combination: "
+            f"{chosen_route['training_examples']} training records."
+        )
+        if st.button("Estimate minutes at Dortmund", key="route_estimate"):
+            result = estimate_at_dortmund(
+                route_artifact, chosen_route, int(route_hour),
+                ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].index(route_day) + 1,
+            )
+            a, b = st.columns(2)
+            a.metric(
+                "Estimated positive timetable-update minutes at Dortmund",
+                f"{result['estimated_archived_delay_minutes']:.1f} min"
+            )
+            b.metric(
+                "Score for 6+ min archived update",
+                f"{result['estimated_archived_6plus_probability']:.1%}"
+            )
+            if chosen_route["training_examples"] < 30:
+                st.warning(
+                    "Only a few matching historical examples. This service estimate is especially uncertain."
+                )
+            st.error(
+                "Not a live or verified physical delay prediction. Do not rely on these numbers "
+                "to plan a connection or decide when to leave for the station."
+            )
+        st.caption(
+            "Training: September 1–16, 2026. Route-aware September validation MAE: "
+            f"{route_artifact['validation_route_mae']:.1f} min; "
+            f"simple model MAE: {route_artifact['validation_baseline_mae']:.1f} min. "
+            "A smaller error is better. Both refer only to retrospective archived updates."
+        )
+        if route_artifact["selected_for_minutes"] != "station_line_destination":
+            st.warning(
+                "The route-aware minutes model was NOT the lowest-error model on validation. "
+                "Its score is shown for research only, not promoted as an improvement."
+            )
+        st.caption(
+            "The original journey start and intermediate stops are not inferred here. "
+            "A service shown as 'toward Aachen' cannot automatically be assumed to stop at Düsseldorf."
+        )
+else:
+    st.info(
+        f"No local {event_mode} route model yet. In PowerShell, run "
+        r'.\.venv\Scripts\python.exe -m railpulse train-route-delay '
+        "after git pull. This uses the September archive locally and "
+        "does not upload learned coefficients."
+    )
+st.divider()
+
 # Local-only interactive model score. The form works without report CSV files.
 st.subheader("Explore the archival model (not a real-world delay predictor)")
 st.caption(
